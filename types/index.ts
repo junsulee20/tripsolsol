@@ -1,0 +1,68 @@
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  profileImage?: string;
+  createdAt: Date;
+}
+
+export interface Trip {
+  id: string;
+  name: string;
+  description?: string;
+  startDate: Date;
+  endDate: Date;
+  participants: string[]; // User IDs
+  createdBy: string; // User ID
+  createdAt: Date;
+  currency: string;
+  totalAmount: number;
+}
+
+export interface Expense {
+  id: string;
+  tripId: string;
+  title: string;
+  description?: string;
+  amount: number;
+  currency: string;
+  paidBy: string; // User ID
+  splitBetween: string[]; // User IDs
+  category: ExpenseCategory;
+  date: Date;
+  receipt?: string; // Image URL
+  createdAt: Date;
+}
+
+export interface Settlement {
+  id: string;
+  tripId: string;
+  from: string; // User ID
+  to: string; // User ID
+  amount: number;
+  currency: string;
+  settled: boolean;
+  settledAt?: Date;
+  createdAt: Date;
+}
+
+export enum ExpenseCategory {
+  FOOD = 'food',
+  TRANSPORT = 'transport',
+  ACCOMMODATION = 'accommodation',
+  ENTERTAINMENT = 'entertainment',
+  SHOPPING = 'shopping',
+  OTHER = 'other'
+}
+
+export interface Balance {
+  userId: string;
+  amount: number; // positive = owes money, negative = is owed money
+}
+
+export interface TripSummary {
+  trip: Trip;
+  totalExpenses: number;
+  balances: Balance[];
+  settlements: Settlement[];
+} 
