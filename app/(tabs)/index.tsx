@@ -102,7 +102,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.emptyTitle}>김윤정님, 환영합니다!</Text>
       <Text style={styles.emptySubtitle}>
-        groups you create or are{'\n'}added to will show here.
+        groups you create or are{'\''}n'}added to will show here.
       </Text>
       <TouchableOpacity
         style={styles.createGroupButton}
@@ -198,54 +198,37 @@ const styles = StyleSheet.create({
   profileText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#333',
   },
   headerButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    gap: 15,
   },
-  travelButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  travelButton: {},
+  addButton: {},
   listContainer: {
-    padding: 0,
-  },
-  emptyContainer: {
-    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   groupCard: {
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    marginVertical: 4,
-    borderRadius: 8,
+    backgroundColor: '#fff',
+    padding: 20,
+    marginBottom: 15,
+    borderRadius: 10,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
   },
   groupIcon: {
     width: 40,
@@ -253,37 +236,42 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 15,
   },
   groupInfo: {
     flex: 1,
   },
   groupName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 2,
+    marginBottom: 5,
   },
   groupMembers: {
     fontSize: 14,
     color: '#666',
   },
   groupAmount: {
+    marginLeft: 'auto',
     alignItems: 'flex-end',
   },
   amountText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4A90E2',
   },
-  emptyState: {
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    padding: 20,
+  },
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 50,
   },
   emptyIcon: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   iconBackground: {
     width: 80,
@@ -294,33 +282,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
+    marginBottom: 10,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
+    marginBottom: 30,
   },
   createGroupButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingVertical: 10,
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    backgroundColor: 'white',
+    borderRadius: 20,
   },
   createGroupText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#4A90E2',
-    fontWeight: '500',
-    marginLeft: 6,
+    marginLeft: 5,
+    fontWeight: 'bold',
   },
-});
+}); 

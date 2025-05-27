@@ -48,3 +48,32 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## TripSolSol
+
+## Firebase 설정
+
+### 1. 환경 변수 설정
+프로젝트 루트에 `.env` 파일을 생성하고 다음 환경 변수들을 설정하세요:
+```env
+EXPO_PUBLIC_FIREBASE_API_KEY=your_api_key
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+EXPO_PUBLIC_FIREBASE_APP_ID=your_app_id
+EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your_measurement_id
+```
+
+### 2. Android 설정
+1. Firebase 콘솔에서 `google-services.json` 파일을 다운로드
+2. 파일을 `android/app/` 디렉토리에 복사
+
+### 3. iOS 설정
+1. Firebase 콘솔에서 `GoogleService-Info.plist` 파일을 다운로드
+2. 파일을 `ios/` 디렉토리에 복사
+
+### 4. 보안 주의사항
+- `.env` 파일은 절대로 Git에 커밋하지 마세요
+- `google-services.json`과 `GoogleService-Info.plist` 파일도 Git에 커밋하지 마세요
+- 이 파일들은 팀 내부에서 안전한 방법으로 공유하세요

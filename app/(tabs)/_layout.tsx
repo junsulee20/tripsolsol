@@ -7,6 +7,7 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -30,8 +31,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: '그룹',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Home',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="travel"
+        options={{
+          title: '여행',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -39,20 +47,15 @@ export default function TabLayout() {
         options={{
           title: '비용 추가',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
+          href: '/expense/select-group',
         }}
       />
       <Tabs.Screen
         name="balance"
         options={{
-          title: '정산',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="travel"
-        options={{
-          title: '여행',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="airplane" color={color} />,
+          title: '설정',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          href: '/profile/settings',
         }}
       />
     </Tabs>
