@@ -10,6 +10,7 @@ export interface Trip {
   id: string;
   name: string;
   description?: string;
+  emoji?: string;
   startDate: Date;
   endDate: Date;
   participants: string[]; // User IDs

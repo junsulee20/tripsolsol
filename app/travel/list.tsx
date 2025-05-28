@@ -1,98 +1,65 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
+  Alert,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert
+  View
 } from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-
-const mockTravels = [
-  {
-    id: '1',
-    country: '중국여행',
-    flag: '🇨🇳',
-    amount: '1,300,000원',
-    date: 'April.19 12:31',
-    status: 'received'
-  },
-  {
-    id: '2',
-    country: '일본여행',
-    flag: '🇯🇵',
-    amount: '200,000원',
-    date: 'April.19 15:20',
-    status: 'paid'
-  },
-  {
-    id: '3',
-    country: '미국여행',
-    flag: '🇺🇸',
-    amount: '2,000,000원',
-    date: 'April.19 19:07',
-    status: 'received'
-  },
-  {
-    id: '4',
-    country: '태국여행',
-    flag: '🇹🇭',
-    amount: '정산완료',
-    date: 'April.20 06:15',
-    status: 'completed'
-  },
-  {
-    id: '5',
-    country: '제주도여행',
-    flag: '✈️',
-    amount: '1,400원',
-    date: 'April.22 11:10',
-    status: 'received'
-  }
-];
+import { getUserTrips } from '../../services/firebaseService';
+import { Trip } from '../../types';
 
 export default function TravelListScreen() {
   const [user] = useState({ name: '빅토리아', avatar: '빅' });
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrips = async () => {
+      try {
+        const userId = 'test-user-id';
+        const tripsFromDB = await getUserTrips(userId);
+        console.log('Fetched trips:', tripsFromDB); // For debugging
+        setTrips(tripsFromDB);
+      } catch (error) {
+        console.error('Error fetching trips:', error);
+        Alert.alert('오류', '여행 목록을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTrips();
+  }, []);
 
   const handleAddTravel = () => {
     router.push('/trip/create');
   };
 
-  const handleTravelPress = (travel: any) => {
+  const handleTravelPress = (travel: Trip) => {
     router.push(`/trip/${travel.id}`);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'received':
-        return '#4A90E2';
-      case 'paid':
-        return '#FF6B6B';
-      case 'completed':
-        return '#4CAF50';
-      default:
-        return '#666';
-    }
-  };
-
-  const renderTravelItem = (travel: any) => (
+  const renderTravelItem = (travel: Trip) => (
     <TouchableOpacity
       key={travel.id}
       style={styles.travelItem}
       onPress={() => handleTravelPress(travel)}
     >
       <View style={styles.travelInfo}>
-        <Text style={styles.travelFlag}>{travel.flag}</Text>
+        <Text style={styles.travelFlag}>{travel.emoji || '✈️'}</Text>
         <View style={styles.travelDetails}>
-          <Text style={styles.travelCountry}>{travel.country}</Text>
-          <Text style={styles.travelDate}>{travel.date}</Text>
+          <Text style={styles.travelCountry}>{travel.name}</Text>
+          <Text style={styles.travelDate}>
+            {travel.startDate?.toLocaleDateString?.() || ''}
+            {travel.endDate ? ` ~ ${travel.endDate.toLocaleDateString?.()}` : ''}
+          </Text>
         </View>
       </View>
-      <Text style={[styles.travelAmount, { color: getStatusColor(travel.status) }]}>
-        {travel.status === 'received' ? '받을돈 : ' : travel.status === 'paid' ? '줄 돈 : ' : ''}
-        {travel.amount}
+      <Text style={styles.travelAmount}>
+        ₩{travel.totalAmount?.toLocaleString?.() || '0'}
       </Text>
     </TouchableOpacity>
   );
@@ -120,9 +87,14 @@ export default function TravelListScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>여행</Text>
           <View style={styles.travelsList}>
-            {mockTravels.map(renderTravelItem)}
+            {loading ? (
+              <Text>로딩 중...</Text>
+            ) : (
+              trips.length > 0
+                ? trips.map(renderTravelItem)
+                : <Text>여행이 없습니다.</Text>
+            )}
           </View>
-          
           <TouchableOpacity style={styles.addTravelButton} onPress={handleAddTravel}>
             <Text style={styles.addTravelText}>새로운 여행 추가하기</Text>
           </TouchableOpacity>

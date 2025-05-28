@@ -1,100 +1,138 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { useState } from 'react';
 import {
-  View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform
+  View
 } from 'react-native';
-import { router } from 'expo-router';
-import { auth } from '../../config/firebase';
+import { db } from '../../config/firebase';
 import { createTrip } from '../../services/firebaseService';
-import { Ionicons } from '@expo/vector-icons';
+
+// 웹 환경에서 Alert를 위한 유틸리티 함수
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
 
 export default function CreateTripScreen() {
   const [tripName, setTripName] = useState('');
+  const [emoji, setEmoji] = useState('');
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [currency, setCurrency] = useState('KRW');
   const [participants, setParticipants] = useState<string[]>([]);
+  const [participantEmails, setParticipantEmails] = useState<{[key: string]: string}>({});
   const [newParticipant, setNewParticipant] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const currencies = [
-    { code: 'KRW', name: '원 (₩)' },
-    { code: 'USD', name: '달러 ($)' },
-    { code: 'EUR', name: '유로 (€)' },
-    { code: 'JPY', name: '엔 (¥)' },
-  ];
-
-  const addParticipant = () => {
+  const addParticipant = async () => {
     if (!newParticipant.trim()) {
-      Alert.alert('오류', '참가자 이메일을 입력해주세요.');
+      showAlert('오류', '참가자 이메일을 입력해주세요.');
       return;
     }
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', newParticipant.trim()));
+      const querySnapshot = await getDocs(q);
 
-    if (participants.includes(newParticipant.trim())) {
-      Alert.alert('오류', '이미 추가된 참가자입니다.');
-      return;
+      if (querySnapshot.empty) {
+        showAlert('오류', '해당 이메일의 사용자를 찾을 수 없습니다.');
+        return;
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const userId = userDoc.id;
+      const userData = userDoc.data();
+
+      if (participants.includes(userId)) {
+        showAlert('오류', '이미 추가된 참가자입니다.');
+        return;
+      }
+
+      setParticipants([...participants, userId]);
+      setParticipantEmails({
+        ...participantEmails,
+        [userId]: userData.email
+      });
+      setNewParticipant('');
+    } catch (error) {
+      showAlert('오류', '참가자 추가에 실패했습니다.');
     }
-
-    setParticipants([...participants, newParticipant.trim()]);
-    setNewParticipant('');
   };
 
-  const removeParticipant = (email: string) => {
-    setParticipants(participants.filter(p => p !== email));
+  const removeParticipant = (userId: string) => {
+    setParticipants(participants.filter(p => p !== userId));
+    const newEmails = { ...participantEmails };
+    delete newEmails[userId];
+    setParticipantEmails(newEmails);
   };
 
   const handleCreateTrip = async () => {
     if (!tripName.trim()) {
-      Alert.alert('오류', '여행 이름을 입력해주세요.');
+      showAlert('오류', '여행 이름을 입력해주세요.');
       return;
     }
-
     if (!startDate || !endDate) {
-      Alert.alert('오류', '여행 날짜를 입력해주세요.');
+      showAlert('오류', '여행 날짜를 입력해주세요.');
       return;
     }
-
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      showAlert('오류', '날짜는 YYYY-MM-DD 형식으로 입력해주세요.');
+      return;
+    }
     const start = new Date(startDate);
     const end = new Date(endDate);
-
-    if (start >= end) {
-      Alert.alert('오류', '종료일은 시작일보다 늦어야 합니다.');
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      showAlert('오류', '유효하지 않은 날짜입니다.');
       return;
     }
-
-    if (!auth.currentUser) {
-      Alert.alert('오류', '로그인이 필요합니다.');
+    if (start >= end) {
+      showAlert('오류', '종료일은 시작일보다 늦어야 합니다.');
       return;
     }
 
     setLoading(true);
     try {
+      // 로그인 기능이 없으므로 mock user 사용
+      const userId = 'test-user-id';
+
       const tripData = {
         name: tripName.trim(),
+        emoji: emoji.trim(),
         description: description.trim(),
         startDate: start,
         endDate: end,
-        participants: [auth.currentUser.uid, ...participants],
-        createdBy: auth.currentUser.uid,
+        participants: [userId, ...participants],
+        createdBy: userId,
         createdAt: new Date(),
-        currency,
+        currency: 'KRW',
         totalAmount: 0
       };
 
       const tripId = await createTrip(tripData);
-      Alert.alert('성공', '여행이 생성되었습니다!', [
-        { text: '확인', onPress: () => router.back() }
-      ]);
+
+      if (Platform.OS === 'web') {
+        window.alert('여행이 생성되었습니다!');
+        router.push(`/trip/${tripId}`);
+      } else {
+        Alert.alert('성공', '여행이 생성되었습니다!', [
+          { text: '확인', onPress: () => router.push(`/trip/${tripId}`) }
+        ]);
+      }
     } catch (error: any) {
-      Alert.alert('오류', '여행 생성에 실패했습니다: ' + error.message);
+      showAlert('오류', error.message || '여행 생성에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -123,6 +161,17 @@ export default function CreateTripScreen() {
               onChangeText={setTripName}
               placeholder="예: 제주도 여행"
               maxLength={50}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>여행 이모지</Text>
+            <TextInput
+              style={styles.input}
+              value={emoji}
+              onChangeText={setEmoji}
+              placeholder="예: ✈️"
+              maxLength={2}
             />
           </View>
 
@@ -164,29 +213,6 @@ export default function CreateTripScreen() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>통화</Text>
-            <View style={styles.currencyContainer}>
-              {currencies.map((curr) => (
-                <TouchableOpacity
-                  key={curr.code}
-                  style={[
-                    styles.currencyButton,
-                    currency === curr.code && styles.currencyButtonSelected
-                  ]}
-                  onPress={() => setCurrency(curr.code)}
-                >
-                  <Text style={[
-                    styles.currencyText,
-                    currency === curr.code && styles.currencyTextSelected
-                  ]}>
-                    {curr.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
             <Text style={styles.label}>참가자 추가</Text>
             <View style={styles.participantInputContainer}>
               <TextInput
@@ -205,11 +231,11 @@ export default function CreateTripScreen() {
             {participants.length > 0 && (
               <View style={styles.participantsList}>
                 <Text style={styles.participantsTitle}>참가자 목록:</Text>
-                {participants.map((email, index) => (
+                {participants.map((userId, index) => (
                   <View key={index} style={styles.participantItem}>
-                    <Text style={styles.participantEmail}>{email}</Text>
+                    <Text style={styles.participantEmail}>{participantEmails[userId]}</Text>
                     <TouchableOpacity
-                      onPress={() => removeParticipant(email)}
+                      onPress={() => removeParticipant(userId)}
                       style={styles.removeButton}
                     >
                       <Ionicons name="close" size={16} color="#e74c3c" />
@@ -295,30 +321,6 @@ const styles = StyleSheet.create({
   halfWidth: {
     width: '48%',
   },
-  currencyContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  currencyButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: 'white',
-  },
-  currencyButtonSelected: {
-    backgroundColor: '#3498db',
-    borderColor: '#3498db',
-  },
-  currencyText: {
-    fontSize: 14,
-    color: '#2c3e50',
-  },
-  currencyTextSelected: {
-    color: 'white',
-  },
   participantInputContainer: {
     flexDirection: 'row',
     gap: 8,
@@ -375,4 +377,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-}); 
+});

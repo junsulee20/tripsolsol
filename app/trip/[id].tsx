@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
 import {
-  View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  Modal
+  View
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 const mockExpenses = [
   {
@@ -110,7 +110,10 @@ export default function TripDetailScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>받을돈 : $280 + 30,000원</Text>
           <Text style={styles.summarySubtitle}>줄 돈 : $90</Text>
-          <TouchableOpacity style={styles.settleButton}>
+          <TouchableOpacity 
+            style={styles.settleButton}
+            onPress={() => router.push(`/balance?tripId=${id}`)}
+          >
             <Text style={styles.settleButtonText}>정산하기</Text>
           </TouchableOpacity>
         </View>
