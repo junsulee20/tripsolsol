@@ -1,26 +1,25 @@
 import {
-  collection,
-  doc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  getDocs,
-  getDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  Timestamp
-} from 'firebase/firestore';
-import {
   createUserWithEmailAndPassword,
+  User as FirebaseUser,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile,
-  User as FirebaseUser
+  updateProfile
 } from 'firebase/auth';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  Timestamp,
+  updateDoc,
+  where
+} from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
-import { User, Trip, Expense, Settlement, TripSummary, Balance } from '../types';
+import { Balance, Expense, Settlement, Trip, User } from '../types';
 
 // Auth Services
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
@@ -83,18 +82,24 @@ export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
   const q = query(
     collection(db, 'trips'),
-    where('participants', 'array-contains', userId),
-    orderBy('createdAt', 'desc')
+    where('participants', 'array-contains', userId)
+    // orderBy('createdAt', 'desc') // Temporarily removed until index is created
   );
   
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    startDate: doc.data().startDate.toDate(),
-    endDate: doc.data().endDate.toDate(),
-    createdAt: doc.data().createdAt.toDate()
-  })) as Trip[];
+  const trips = querySnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      startDate: data.startDate?.toDate() || new Date(),
+      endDate: data.endDate?.toDate() || new Date(),
+      createdAt: data.createdAt?.toDate() || new Date()
+    } as Trip;
+  });
+
+  // Client-side sorting as a temporary solution
+  return trips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 };
 
 export const getTripById = async (tripId: string): Promise<Trip | null> => {
