@@ -3,8 +3,12 @@ import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import {
   addDoc,
   collection,
@@ -40,25 +44,82 @@ const mockTrips: Trip[] = [
 
 // Auth Services
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
-  const user: User = {
-    id: 'mock-user-id',
-    email,
-    name,
-    createdAt: new Date()
-  };
-  return user;
+  try {
+    // Set persistence to LOCAL to keep user logged in
+    await setPersistence(auth, browserLocalPersistence);
+    
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user: User = {
+      id: userCredential.user.uid,
+      email,
+      name,
+      createdAt: new Date()
+    };
+    
+    // Create user document in Firestore
+    await addDoc(collection(db, 'users'), user);
+    
+    // Update user profile with display name
+    await updateProfile(userCredential.user, {
+      displayName: name
+    });
+    
+    return user;
+  } catch (error: any) {
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          throw new Error('이미 사용 중인 이메일입니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/operation-not-allowed':
+          throw new Error('이메일/비밀번호 로그인이 비활성화되어 있습니다.');
+        case 'auth/weak-password':
+          throw new Error('비밀번호가 너무 약합니다.');
+        default:
+          throw new Error('회원가입 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
 };
 
-export const signIn = async (email: string, password: string): Promise<any> => {
-  return { uid: 'mock-user-id', email };
+export const signIn = async (email: string, password: string): Promise<FirebaseUser> => {
+  try {
+    // Set persistence to LOCAL to keep user logged in
+    await setPersistence(auth, browserLocalPersistence);
+    
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error: any) {
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/user-disabled':
+          throw new Error('비활성화된 계정입니다.');
+        case 'auth/user-not-found':
+          throw new Error('존재하지 않는 계정입니다.');
+        case 'auth/wrong-password':
+          throw new Error('비밀번호가 일치하지 않습니다.');
+        default:
+          throw new Error('로그인 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
 };
 
 export const logout = async (): Promise<void> => {
   // Mock logout
 };
 
-export const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<void> => {
-  // Mock update
+export const getCurrentUser = (): FirebaseUser | null => {
+  return auth.currentUser;
+};
+
+export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void) => {
+  return onAuthStateChanged(auth, callback);
 };
 
 // User Services
