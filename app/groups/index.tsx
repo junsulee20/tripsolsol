@@ -2,8 +2,8 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -16,11 +16,15 @@ const mockGroups = [
   { id: '4', name: '베트남 다낭', icon: 'airplane', color: '#4A90E2' },
 ];
 
-export default function AddExpenseScreen() {
+export default function GroupsScreen() {
+  const handleCreateGroup = () => {
+    router.push('/groups/create');
+  };
+
   const handleSelectGroup = (group: any) => {
     router.push({
-      pathname: '/expense/detail',
-      params: { groupId: group.id, groupName: group.name }
+      pathname: '/groups/[id]',
+      params: { id: group.id }
     });
   };
 
@@ -32,34 +36,33 @@ export default function AddExpenseScreen() {
       <View style={[styles.groupIcon, { backgroundColor: item.color }]}>
         <Ionicons name={item.icon as any} size={20} color="white" />
       </View>
-      <Text style={styles.groupName}>{item.name}</Text>
+      <View style={styles.groupInfo}>
+        <Text style={styles.groupName}>{item.name}</Text>
+        <Text style={styles.groupSubtitle}>4명의 멤버</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#666" />
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+        <Text style={styles.headerTitle}>내 그룹</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={handleCreateGroup}
+        >
+          <Ionicons name="add" size={24} color="#4A90E2" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>지출 추가할 그룹 선택</Text>
-        <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.instructionContainer}>
-          <Text style={styles.instructionText}>
-            지출을 추가할 그룹을 선택해주세요
-          </Text>
-        </View>
-
-        <FlatList
-          data={mockGroups}
-          renderItem={renderGroupItem}
-          keyExtractor={item => item.id}
-          style={styles.groupsList}
-        />
-      </View>
+      <FlatList
+        data={mockGroups}
+        renderItem={renderGroupItem}
+        keyExtractor={item => item.id}
+        style={styles.groupsList}
+        contentContainerStyle={styles.groupsListContent}
+      />
     </View>
   );
 }
@@ -80,44 +83,28 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
   },
-  placeholder: {
+  addButton: {
     width: 32,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  instructionContainer: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#1976D2',
-    textAlign: 'center',
-    fontWeight: '500',
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   groupsList: {
     flex: 1,
+  },
+  groupsListContent: {
+    padding: 16,
   },
   groupItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    padding: 20,
+    padding: 16,
     borderRadius: 12,
     marginBottom: 12,
     shadowColor: '#000',
@@ -137,10 +124,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
+  groupInfo: {
+    flex: 1,
+  },
   groupName: {
     fontSize: 16,
     fontWeight: '500',
     color: '#333',
-    flex: 1,
+    marginBottom: 4,
+  },
+  groupSubtitle: {
+    fontSize: 14,
+    color: '#666',
   },
 }); 

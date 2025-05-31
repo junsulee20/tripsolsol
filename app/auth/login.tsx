@@ -11,8 +11,10 @@ import {
   ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
+
 import { signIn, onAuthStateChange, getCurrentUser } from '../../services/firebaseService';
 import { Ionicons } from '@expo/vector-icons';
+import { signIn } from '@/services/firebaseService';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');

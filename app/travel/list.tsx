@@ -12,17 +12,66 @@ import {
 import { getUserTrips } from '../../services/firebaseService';
 import { Trip } from '../../types';
 
+// 임시 데이터 - 실제로는 DB에서 가져와야 함
+const mockExpenses = {
+  'trip-1': [
+    {
+      id: '1',
+      date: '2025.06.19',
+      items: [
+        { id: '1', name: '인앤아웃', paidBy: '나', amount: 11 },
+        { id: '2', name: '우버', paidBy: '나', amount: 30 },
+        { id: '3', name: '맥주값', paidBy: '김윤정', amount: 26 },
+      ]
+    },
+    {
+      id: '2',
+      date: '2025.06.18',
+      items: [
+        { id: '4', name: '호텔', paidBy: '나', amount: 100 },
+        { id: '5', name: '카지노', paidBy: '김윤정', amount: 100 },
+      ]
+    }
+  ]
+};
+
 export default function TravelListScreen() {
   const [user] = useState({ name: '빅토리아', avatar: '빅' });
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 정산 금액 계산 함수
+  const calculateTripBalance = (tripId: string) => {
+    const expenses = mockExpenses[tripId] || [];
+    let totalReceivable = 0;
+    let totalPayable = 0;
+    const myName = '나';
+    const memberCount = 4; // 임시로 4명으로 설정
+
+    expenses.forEach(dateGroup => {
+      dateGroup.items.forEach(expense => {
+        const amount = expense.amount;
+        if (expense.paidBy === myName) {
+          totalReceivable += amount;
+        } else {
+          totalPayable += amount / memberCount;
+        }
+      });
+    });
+
+    const netBalance = totalReceivable - Math.round(totalPayable);
+    return {
+      netBalance,
+      formattedBalance: netBalance >= 0 ? `+$${netBalance}` : `-$${Math.abs(netBalance)}`
+    };
+  };
 
   useEffect(() => {
     const fetchTrips = async () => {
       try {
         const userId = 'test-user-id';
         const tripsFromDB = await getUserTrips(userId);
-        console.log('Fetched trips:', tripsFromDB); // For debugging
+        console.log('Fetched trips:', tripsFromDB);
         setTrips(tripsFromDB);
       } catch (error) {
         console.error('Error fetching trips:', error);
@@ -42,27 +91,39 @@ export default function TravelListScreen() {
     router.push(`/trip/${travel.id}`);
   };
 
-  const renderTravelItem = (travel: Trip) => (
-    <TouchableOpacity
-      key={travel.id}
-      style={styles.travelItem}
-      onPress={() => handleTravelPress(travel)}
-    >
-      <View style={styles.travelInfo}>
-        <Text style={styles.travelFlag}>{travel.emoji || '✈️'}</Text>
-        <View style={styles.travelDetails}>
-          <Text style={styles.travelCountry}>{travel.name}</Text>
-          <Text style={styles.travelDate}>
-            {travel.startDate?.toLocaleDateString?.() || ''}
-            {travel.endDate ? ` ~ ${travel.endDate.toLocaleDateString?.()}` : ''}
+  const renderTravelItem = (travel: Trip) => {
+    const { formattedBalance } = calculateTripBalance(travel.id);
+    
+    return (
+      <TouchableOpacity
+        key={travel.id}
+        style={styles.travelItem}
+        onPress={() => handleTravelPress(travel)}
+      >
+        <View style={styles.travelInfo}>
+          <Text style={styles.travelFlag}>{travel.emoji || '✈️'}</Text>
+          <View style={styles.travelDetails}>
+            <Text style={styles.travelCountry}>{travel.name}</Text>
+            <Text style={styles.travelDate}>
+              {travel.startDate?.toLocaleDateString?.() || ''}
+              {travel.endDate ? ` ~ ${travel.endDate.toLocaleDateString?.()}` : ''}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.amountContainer}>
+          <Text style={styles.travelAmount}>
+            ₩{travel.totalAmount?.toLocaleString?.() || '0'}
+          </Text>
+          <Text style={[
+            styles.balanceAmount,
+            { color: formattedBalance.startsWith('+') ? '#27ae60' : '#e74c3c' }
+          ]}>
+            {formattedBalance}
           </Text>
         </View>
-      </View>
-      <Text style={styles.travelAmount}>
-        ₩{travel.totalAmount?.toLocaleString?.() || '0'}
-      </Text>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -229,5 +290,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1976D2',
     fontWeight: '500',
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  balanceAmount: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 }); 
