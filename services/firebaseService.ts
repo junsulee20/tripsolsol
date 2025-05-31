@@ -3,8 +3,12 @@ import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import {
   addDoc,
   collection,
@@ -21,169 +25,168 @@ import {
 import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
 
+// Mock data
+const mockTrips: Trip[] = [
+  {
+    id: 'trip-1',
+    name: '미국여행',
+    emoji: '🇺🇸',
+    description: '라스베이거스 여행',
+    startDate: new Date('2025-06-18'),
+    endDate: new Date('2025-06-20'),
+    participants: ['user1', 'user2', 'user3', 'user4'],
+    createdBy: 'user1',
+    createdAt: new Date('2025-01-15'),
+    currency: 'USD',
+    totalAmount: 500
+  }
+];
+
 // Auth Services
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const user: User = {
-    id: userCredential.user.uid,
-    email,
-    name,
-    createdAt: new Date()
-  };
-  
-  await addDoc(collection(db, 'users'), user);
-  return user;
+  try {
+    // Set persistence to LOCAL to keep user logged in
+    await setPersistence(auth, browserLocalPersistence);
+    
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user: User = {
+      id: userCredential.user.uid,
+      email,
+      name,
+      createdAt: new Date()
+    };
+    
+    // Create user document in Firestore
+    await addDoc(collection(db, 'users'), user);
+    
+    // Update user profile with display name
+    await updateProfile(userCredential.user, {
+      displayName: name
+    });
+    
+    return user;
+  } catch (error: any) {
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          throw new Error('이미 사용 중인 이메일입니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/operation-not-allowed':
+          throw new Error('이메일/비밀번호 로그인이 비활성화되어 있습니다.');
+        case 'auth/weak-password':
+          throw new Error('비밀번호가 너무 약합니다.');
+        default:
+          throw new Error('회원가입 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
 };
 
 export const signIn = async (email: string, password: string): Promise<FirebaseUser> => {
-  const userCredential = await signInWithEmailAndPassword(auth, email, password);
-  return userCredential.user;
+  try {
+    // Set persistence to LOCAL to keep user logged in
+    await setPersistence(auth, browserLocalPersistence);
+    
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+  } catch (error: any) {
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/user-disabled':
+          throw new Error('비활성화된 계정입니다.');
+        case 'auth/user-not-found':
+          throw new Error('존재하지 않는 계정입니다.');
+        case 'auth/wrong-password':
+          throw new Error('비밀번호가 일치하지 않습니다.');
+        default:
+          throw new Error('로그인 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
 };
 
 export const logout = async (): Promise<void> => {
-  await signOut(auth);
+  // Mock logout
 };
 
-export const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<void> => {
-  if (auth.currentUser) {
-    await updateProfile(auth.currentUser, updates);
-  }
+export const getCurrentUser = (): FirebaseUser | null => {
+  return auth.currentUser;
+};
+
+export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void) => {
+  return onAuthStateChanged(auth, callback);
 };
 
 // User Services
 export const getUserById = async (userId: string): Promise<User | null> => {
-  const userDoc = await getDoc(doc(db, 'users', userId));
-  if (userDoc.exists()) {
-    return { id: userDoc.id, ...userDoc.data() } as User;
-  }
-  return null;
+  return {
+    id: userId,
+    email: 'mock@example.com',
+    name: 'Mock User',
+    createdAt: new Date()
+  };
 };
 
 export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
-  const users: User[] = [];
-  for (const userId of userIds) {
-    const user = await getUserById(userId);
-    if (user) users.push(user);
-  }
-  return users;
+  return userIds.map(id => ({
+    id,
+    email: `user${id}@example.com`,
+    name: `User ${id}`,
+    createdAt: new Date()
+  }));
 };
 
 // Trip Services
 export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, 'trips'), {
+  const newTrip = {
     ...trip,
-    startDate: Timestamp.fromDate(trip.startDate),
-    endDate: Timestamp.fromDate(trip.endDate),
-    createdAt: Timestamp.fromDate(trip.createdAt)
-  });
-  return docRef.id;
+    id: `trip-${Date.now()}`
+  };
+  mockTrips.push(newTrip);
+  return newTrip.id;
 };
 
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
-  const q = query(
-    collection(db, 'trips'),
-    where('participants', 'array-contains', userId)
-    // orderBy('createdAt', 'desc') // Temporarily removed until index is created
-  );
-  
-  const querySnapshot = await getDocs(q);
-  const trips = querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      startDate: data.startDate?.toDate() || new Date(),
-      endDate: data.endDate?.toDate() || new Date(),
-      createdAt: data.createdAt?.toDate() || new Date()
-    } as Trip;
-  });
-
-  // Client-side sorting as a temporary solution
-  return trips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return mockTrips;
 };
 
 export const getTripById = async (tripId: string): Promise<Trip | null> => {
-  const tripDoc = await getDoc(doc(db, 'trips', tripId));
-  if (tripDoc.exists()) {
-    const data = tripDoc.data();
-    return {
-      id: tripDoc.id,
-      ...data,
-      startDate: data.startDate.toDate(),
-      endDate: data.endDate.toDate(),
-      createdAt: data.createdAt.toDate()
-    } as Trip;
-  }
-  return null;
+  return mockTrips.find(trip => trip.id === tripId) || null;
 };
 
 // Expense Services
 export const addExpense = async (expense: Omit<Expense, 'id'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, 'expenses'), {
-    ...expense,
-    date: Timestamp.fromDate(expense.date),
-    createdAt: Timestamp.fromDate(expense.createdAt)
-  });
-  return docRef.id;
+  return `expense-${Date.now()}`;
 };
 
 export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
-  const q = query(
-    collection(db, 'expenses'),
-    where('tripId', '==', tripId),
-    orderBy('date', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    date: doc.data().date.toDate(),
-    createdAt: doc.data().createdAt.toDate()
-  })) as Expense[];
+  return [];
 };
 
 export const updateExpense = async (expenseId: string, updates: Partial<Expense>): Promise<void> => {
-  const expenseRef = doc(db, 'expenses', expenseId);
-  await updateDoc(expenseRef, updates);
+  // Mock update
 };
 
 export const deleteExpense = async (expenseId: string): Promise<void> => {
-  await deleteDoc(doc(db, 'expenses', expenseId));
+  // Mock delete
 };
 
 // Settlement Services
 export const addSettlement = async (settlement: Omit<Settlement, 'id'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, 'settlements'), {
-    ...settlement,
-    createdAt: Timestamp.fromDate(settlement.createdAt),
-    settledAt: settlement.settledAt ? Timestamp.fromDate(settlement.settledAt) : null
-  });
-  return docRef.id;
+  return `settlement-${Date.now()}`;
 };
 
 export const getTripSettlements = async (tripId: string): Promise<Settlement[]> => {
-  const q = query(
-    collection(db, 'settlements'),
-    where('tripId', '==', tripId),
-    orderBy('createdAt', 'desc')
-  );
-  
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    createdAt: doc.data().createdAt.toDate(),
-    settledAt: doc.data().settledAt?.toDate()
-  })) as Settlement[];
+  return [];
 };
 
 export const markSettlementAsSettled = async (settlementId: string): Promise<void> => {
-  const settlementRef = doc(db, 'settlements', settlementId);
-  await updateDoc(settlementRef, {
-    settled: true,
-    settledAt: Timestamp.now()
-  });
+  // Mock settle
 };
 
 // Calculate balances for a trip

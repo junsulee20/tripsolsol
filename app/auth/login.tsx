@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,32 @@ import {
   ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
-import { signIn } from '../../services/firebaseService';
+
+import { signIn, onAuthStateChange, getCurrentUser } from '../../services/firebaseService';
 import { Ionicons } from '@expo/vector-icons';
+import { signIn } from '@/services/firebaseService';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const unsubscribe = onAuthStateChange((user) => {
+      if (user) {
+        router.replace('/expense/select-group');
+      }
+    });
+
+    // Check current user immediately
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      router.replace('/expense/select-group');
+    }
+
+    return () => unsubscribe();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -28,7 +47,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.replace('/(tabs)');
+      router.replace('/expense/select-group');
     } catch (error: any) {
       Alert.alert('로그인 실패', error.message);
     } finally {
@@ -38,10 +57,6 @@ export default function LoginScreen() {
 
   const handleSignUp = () => {
     router.push('/auth/signup');
-  };
-
-  const handleGoogleSignIn = () => {
-    Alert.alert('Google 로그인', 'Google 로그인 기능은 준비 중입니다.');
   };
 
   return (
@@ -61,20 +76,44 @@ export default function LoginScreen() {
           <Text style={styles.title}>트립솔솔</Text>
         </View>
 
-        <View style={styles.buttonContainer}>
+        <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>이메일</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="example@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>비밀번호</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.loginButtonText}>
+              {loading ? '로그인 중...' : '로그인'}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
-            <Text style={styles.signUpButtonText}>Sign up</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.loginButton} onPress={() => {}}>
-            <Text style={styles.loginButtonText}>Log in</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
-            <View style={styles.googleIcon}>
-              <Text style={styles.googleIconText}>G</Text>
-            </View>
-            <Text style={styles.googleButtonText}>Google로 회원가입</Text>
+            <Text style={styles.signUpButtonText}>회원가입</Text>
           </TouchableOpacity>
         </View>
 
@@ -98,7 +137,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 80,
+    marginBottom: 40,
   },
   logoContainer: {
     marginBottom: 24,
@@ -125,22 +164,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  buttonContainer: {
+  form: {
     gap: 16,
-    marginBottom: 60,
+    marginBottom: 40,
   },
-  signUpButton: {
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: 'white',
+  },
+  loginButton: {
     backgroundColor: '#4A90E2',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
-  signUpButtonText: {
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  loginButton: {
+  signUpButton: {
     backgroundColor: 'transparent',
     borderRadius: 12,
     borderWidth: 1,
@@ -148,36 +207,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  loginButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  googleButton: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#4285F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  googleIconText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  googleButtonText: {
+  signUpButtonText: {
     color: '#333',
     fontSize: 16,
     fontWeight: '500',
