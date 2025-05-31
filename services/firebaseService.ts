@@ -211,4 +211,33 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
     userId,
     amount: Math.round(amount * 100) / 100 // Round to 2 decimal places
   }));
+};
+
+// Trip Member Services
+export const getTripMembers = async (tripId: string): Promise<any[]> => {
+  const tripRef = doc(db, 'trips', tripId);
+  const tripDoc = await getDoc(tripRef);
+  
+  if (!tripDoc.exists()) {
+    throw new Error('Trip not found');
+  }
+
+  const tripData = tripDoc.data();
+  const memberIds = tripData.participants || [];
+  
+  const members = await Promise.all(
+    memberIds.map(async (memberId: string) => {
+      const userDoc = await getDoc(doc(db, 'users', memberId));
+      if (userDoc.exists()) {
+        return {
+          id: memberId,
+          name: userDoc.data().name,
+          email: userDoc.data().email,
+        };
+      }
+      return null;
+    })
+  );
+
+  return members.filter(member => member !== null);
 }; 

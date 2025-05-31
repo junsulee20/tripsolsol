@@ -1,67 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
   Alert
 } from 'react-native';
-import { router } from 'expo-router';
+import { Camera as ExpoCamera } from 'expo-camera';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function CameraScreen() {
-  const [loading, setLoading] = useState(false);
+  const { tripId, tripName } = useLocalSearchParams();
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const cameraRef = useRef<any>(null);
 
-  const handleCamera = () => {
-    Alert.alert('카메라', '카메라 기능은 준비 중입니다.');
-  };
+  useEffect(() => {
+    (async () => {
+      const { status } = await ExpoCamera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
 
-  const handleGallery = () => {
-    Alert.alert('갤러리', '갤러리 기능은 준비 중입니다.');
+  const handleCapture = async () => {
+    if (!cameraRef.current) return;
+
+    setIsScanning(true);
+    try {
+      const photo = await cameraRef.current.takePictureAsync();
+      // TODO: Implement OCR processing here
+      // For now, we'll simulate OCR with a mock amount
+      const mockAmount = "12345";
+      
+      // Navigate to detail page with the scanned amount
+      router.push({
+        pathname: '/expense/detail',
+        params: { 
+          tripId,
+          tripName,
+          scannedAmount: mockAmount
+        }
+      });
+    } catch (error) {
+      console.error('Error capturing photo:', error);
+      Alert.alert('오류', '사진 촬영 중 오류가 발생했습니다.');
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleClose = () => {
-    router.back();
+    router.push({
+      pathname: '/expense/detail',
+      params: { tripId, tripName }
+    });
   };
+
+  if (hasPermission === null) {
+    return <View style={styles.container}><ActivityIndicator size="large" /></View>;
+  }
+  if (hasPermission === false) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>카메라 접근 권한이 필요합니다</Text>
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.buttonText}>돌아가기</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.tripInfo}>
-          <View style={styles.tripIcon}>
-            <Ionicons name="airplane" size={20} color="white" />
-          </View>
-          <Text style={styles.tripName}>21학번 동기 유럽 여행</Text>
-        </View>
-        <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#333" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.content}>
-        <Text style={styles.title}>영수증을 스캔해주세요</Text>
-        
-        <View style={styles.cameraPlaceholder}>
-          <View style={styles.cameraIcon}>
-            <Ionicons name="camera-outline" size={60} color="#999" />
-          </View>
-          <Text style={styles.placeholderText}>
-            영수증 이미지를 촬영하거나 선택해주세요
-          </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleCamera}>
-            <Ionicons name="camera" size={20} color="#4A90E2" />
-            <Text style={styles.actionButtonText}>카메라</Text>
+      <ExpoCamera
+        ref={cameraRef}
+        style={styles.camera}
+        type="back"
+      >
+        <View style={styles.overlay}>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={handleClose}
+          >
+            <Ionicons name="close" size={30} color="white" />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton} onPress={handleGallery}>
-            <Ionicons name="images" size={20} color="#4A90E2" />
-            <Text style={styles.actionButtonText}>갤러리</Text>
-          </TouchableOpacity>
+          <View style={styles.scanArea}>
+            <View style={styles.scanFrame} />
+          </View>
+
+          <View style={styles.bottomControls}>
+            <TouchableOpacity
+              style={[styles.captureButton, isScanning && styles.captureButtonDisabled]}
+              onPress={handleCapture}
+              disabled={isScanning}
+            >
+              {isScanning ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <View style={styles.captureButtonInner} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ExpoCamera>
     </View>
   );
 }
@@ -69,103 +116,72 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: 'black',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  tripInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  camera: {
     flex: 1,
   },
-  tripIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  tripName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
   },
-  content: {
+  scanArea: {
     flex: 1,
-    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 40,
-  },
-  cameraPlaceholder: {
-    width: '100%',
-    height: 300,
-    backgroundColor: 'white',
-    borderRadius: 12,
+  scanFrame: {
+    width: '80%',
+    height: '40%',
     borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderStyle: 'dashed',
+    borderColor: 'white',
+    borderRadius: 10,
+  },
+  bottomControls: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
   },
-  cameraIcon: {
-    marginBottom: 16,
+  captureButtonDisabled: {
+    opacity: 0.5,
   },
-  placeholderText: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  captureButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: 'white',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#4A90E2',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  actionButtonText: {
+  errorText: {
+    color: 'white',
     fontSize: 16,
-    color: '#4A90E2',
-    fontWeight: '500',
-    marginLeft: 8,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
   },
 }); 

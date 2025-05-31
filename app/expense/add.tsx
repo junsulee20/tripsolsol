@@ -1,38 +1,60 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
-const mockGroups = [
-  { id: '1', name: '21학번 동기 유럽 여행', icon: 'airplane', color: '#4A90E2' },
-  { id: '2', name: '오사카 커플 여행', icon: 'heart', color: '#FF6B6B' },
-  { id: '3', name: '8.21-8.23 학술 컨퍼런스', icon: 'school', color: '#FFA726' },
-  { id: '4', name: '베트남 다낭', icon: 'airplane', color: '#4A90E2' },
-];
+import { getUserTrips } from '../../services/firebaseService';
+import { Trip } from '../../types';
 
 export default function AddExpenseScreen() {
-  const handleSelectGroup = (group: any) => {
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrips = async () => {
+      try {
+        const userId = 'test-user-id'; // TODO: Get actual user ID from auth context
+        const tripsFromDB = await getUserTrips(userId);
+        setTrips(tripsFromDB);
+      } catch (error) {
+        console.error('Error fetching trips:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTrips();
+  }, []);
+
+  const handleSelectTrip = (trip: Trip) => {
     router.push({
-      pathname: '/expense/detail',
-      params: { groupId: group.id, groupName: group.name }
+      pathname: '/expense/camera',
+      params: { tripId: trip.id, tripName: trip.name }
     });
   };
 
-  const renderGroupItem = ({ item }: { item: any }) => (
+  const renderTripItem = ({ item }: { item: Trip }) => (
     <TouchableOpacity
-      style={styles.groupItem}
-      onPress={() => handleSelectGroup(item)}
+      style={styles.tripItem}
+      onPress={() => handleSelectTrip(item)}
     >
-      <View style={[styles.groupIcon, { backgroundColor: item.color }]}>
-        <Ionicons name={item.icon as any} size={20} color="white" />
+      <View style={[styles.tripIcon, { backgroundColor: '#4A90E2' }]}>
+        <Ionicons name="airplane" size={20} color="white" />
       </View>
-      <Text style={styles.groupName}>{item.name}</Text>
+      <View style={styles.tripInfo}>
+        <Text style={styles.tripName}>{item.name}</Text>
+        <Text style={styles.tripSubtitle}>
+          {item.startDate?.toLocaleDateString?.() || ''}
+          {item.endDate ? ` ~ ${item.endDate.toLocaleDateString?.()}` : ''}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#666" />
     </TouchableOpacity>
   );
 
@@ -42,23 +64,39 @@ export default function AddExpenseScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>지출 추가할 그룹 선택</Text>
+        <Text style={styles.headerTitle}>지출 추가할 여행 선택</Text>
         <View style={styles.placeholder} />
       </View>
 
       <View style={styles.content}>
         <View style={styles.instructionContainer}>
           <Text style={styles.instructionText}>
-            지출을 추가할 그룹을 선택해주세요
+            지출을 추가할 여행을 선택해주세요
           </Text>
         </View>
 
-        <FlatList
-          data={mockGroups}
-          renderItem={renderGroupItem}
-          keyExtractor={item => item.id}
-          style={styles.groupsList}
-        />
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#4A90E2" />
+          </View>
+        ) : trips.length > 0 ? (
+          <FlatList
+            data={trips}
+            renderItem={renderTripItem}
+            keyExtractor={item => item.id}
+            style={styles.tripsList}
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>여행이 없습니다</Text>
+            <TouchableOpacity 
+              style={styles.createTripButton}
+              onPress={() => router.push('/trip/create')}
+            >
+              <Text style={styles.createTripButtonText}>새 여행 만들기</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -110,10 +148,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
   },
-  groupsList: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 16,
+  },
+  createTripButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  createTripButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  tripsList: {
     flex: 1,
   },
-  groupItem: {
+  tripItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
@@ -129,7 +193,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  groupIcon: {
+  tripIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -137,10 +201,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  groupName: {
+  tripInfo: {
+    flex: 1,
+  },
+  tripName: {
     fontSize: 16,
     fontWeight: '500',
     color: '#333',
-    flex: 1,
+    marginBottom: 4,
+  },
+  tripSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  percentageInput: {
+    // Add appropriate styles for percentage input
+  },
+  amountInput: {
+    // Add appropriate styles for amount input
   },
 }); 
