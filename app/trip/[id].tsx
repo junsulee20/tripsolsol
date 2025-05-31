@@ -36,6 +36,35 @@ export default function TripDetailScreen() {
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // 정산 금액 계산
+  const calculateBalances = () => {
+    let totalReceivable = 0;  // 받을 돈
+    let totalPayable = 0;     // 줄 돈
+    const myName = '나';      // 임시로 '나'를 현재 사용자로 설정
+
+    mockExpenses.forEach(dateGroup => {
+      dateGroup.items.forEach(expense => {
+        const amount = expense.amount;
+        if (expense.paidBy === myName || expense.paidBy === 'Junsu') {
+          // 내가 지불한 금액
+          totalReceivable += amount;
+        } else {
+          // 다른 사람이 지불한 금액 중 내가 부담해야 할 부분
+          // 현재는 단순히 인원수로 나누어 계산
+          const memberCount = 4; // 임시로 4명으로 설정
+          totalPayable += amount / memberCount;
+        }
+      });
+    });
+
+    return {
+      receivable: totalReceivable,
+      payable: Math.round(totalPayable)
+    };
+  };
+
+  const balances = calculateBalances();
+
   const handleExpensePress = (expense: any) => {
     setSelectedExpense(expense);
     setModalVisible(true);
@@ -43,7 +72,7 @@ export default function TripDetailScreen() {
 
   const handleEditExpense = () => {
     setModalVisible(false);
-    Alert.alert('수정', '지출 수정 기능은 준비 중입니다.');
+    router.push(`/expense/detail?tripId=${id}&expenseId=${selectedExpense.id}`);
   };
 
   const handleDeleteExpense = () => {
@@ -108,8 +137,8 @@ export default function TripDetailScreen() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>받을돈 : $280 + 30,000원</Text>
-          <Text style={styles.summarySubtitle}>줄 돈 : $90</Text>
+          <Text style={styles.summaryTitle}>받을 돈: ${balances.receivable}</Text>
+          <Text style={styles.summarySubtitle}>줄 돈: ${balances.payable}</Text>
           <TouchableOpacity 
             style={styles.settleButton}
             onPress={() => router.push(`/balance?tripId=${id}`)}
