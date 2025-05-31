@@ -31,10 +31,32 @@ export default function CreateTripScreen() {
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
   const [participants, setParticipants] = useState<string[]>([]);
   const [participantEmails, setParticipantEmails] = useState<{[key: string]: string}>({});
   const [newParticipant, setNewParticipant] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const onStartDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS !== 'web') {
+      setShowStartPicker(false);
+    }
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setStartDate(formattedDate);
+    }
+  };
+
+  const onEndDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS !== 'web') {
+      setShowEndPicker(false);
+    }
+    if (selectedDate) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setEndDate(formattedDate);
+    }
+  };
 
   const addParticipant = async () => {
     if (!newParticipant.trim()) {
