@@ -24,14 +24,14 @@ export default function LoginScreen() {
     // Check if user is already logged in
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
-        router.replace('/expense/select-group');
+        router.replace('/travel/list');
       }
     });
 
     // Check current user immediately
     const currentUser = getCurrentUser();
     if (currentUser) {
-      router.replace('/expense/select-group');
+      router.replace('/travel/list');
     }
 
     return () => unsubscribe();
@@ -46,7 +46,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.replace('/expense/select-group');
+      router.replace('/travel/list');
     } catch (error: any) {
       Alert.alert('로그인 실패', error.message);
     } finally {

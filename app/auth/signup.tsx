@@ -51,7 +51,7 @@ export default function SignUpScreen() {
         { 
           text: '확인', 
           onPress: () => {
-            router.replace('/expense/select-group');
+            router.replace('/travel/list');
           }
         }
       ]);
