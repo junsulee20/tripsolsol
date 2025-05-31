@@ -47,7 +47,7 @@ export default function TabLayout() {
         options={{
           title: '비용 추가',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
-          href: '/expense/select-group',
+          href: '/travel/list',
         }}
       />
       <Tabs.Screen
