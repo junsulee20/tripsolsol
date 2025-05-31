@@ -1,33 +1,33 @@
-// Mock Firebase implementation for Expo Go compatibility
-export const auth = {
-  currentUser: null,
-  signInWithEmailAndPassword: () => Promise.resolve(),
-  createUserWithEmailAndPassword: () => Promise.resolve(),
-  signOut: () => Promise.resolve(),
-  onAuthStateChanged: (callback: any) => {
-    // Mock user for testing
-    setTimeout(() => callback(null), 100);
-    return () => {}; // unsubscribe function
-  }
+import { getApp, initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+// Firebase 설정
+const firebaseConfig = {
+  apiKey: process.env.EXPBASE_AUO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIRETH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-export const db = {
-  collection: () => ({
-    add: () => Promise.resolve({ id: 'mock-id' }),
-    where: () => ({
-      get: () => Promise.resolve({ empty: true, docs: [] })
-    }),
-    get: () => Promise.resolve({ docs: [] })
-  })
-};
+// Firebase 초기화
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (error) {
+  // 이미 초기화된 경우 기존 앱 사용
+  app = getApp();
+}
 
-export const storage = {
-  ref: () => ({
-    put: () => Promise.resolve(),
-    getDownloadURL: () => Promise.resolve('mock-url')
-  })
-};
+// Firebase 서비스 초기화
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
 
-// Mock app export
-const app = { name: 'mock-app' };
+
+
 export default app; 
