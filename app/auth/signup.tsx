@@ -25,7 +25,7 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web') {
         window.alert('모든 필드를 입력해주세요.');
       } else {
         Alert.alert('오류', '모든 필드를 입력해주세요.');
@@ -34,7 +34,7 @@ export default function SignUpScreen() {
     }
 
     if (password !== confirmPassword) {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web') {
         window.alert('비밀번호가 일치하지 않습니다.');
       } else {
         Alert.alert('오류', '비밀번호가 일치하지 않습니다.');
@@ -43,7 +43,7 @@ export default function SignUpScreen() {
     }
 
     if (password.length < 6) {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web') {
         window.alert('비밀번호가 너무 짧습니다.\n비밀번호는 최소 6자리 이상 입력해주세요.');
       } else {
         Alert.alert(
@@ -61,7 +61,7 @@ export default function SignUpScreen() {
     }
 
     if (!agreeTerms) {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web') {
         window.alert('이용약관과 개인정보 처리방침에 동의해주세요.');
       } else {
         Alert.alert('오류', '이용약관과 개인정보 처리방침에 동의해주세요.');
@@ -74,7 +74,7 @@ export default function SignUpScreen() {
       const user = await signUp(email, password, name);
       console.log('회원가입 성공:', user); // 디버깅용 로그
       
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web') {
         const proceed = window.confirm('회원가입 완료!\n환영합니다! 회원가입이 완료되었습니다.\n메인 페이지로 이동하시겠습니까?');
         if (proceed) {
           router.replace('/travel/list');
@@ -103,7 +103,7 @@ export default function SignUpScreen() {
         console.log('이미 가입된 이메일 모달 표시 시도...'); // 디버깅용 로그
         
         // 웹 환경에서는 window.alert 사용
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web') {
           const userChoice = window.confirm(
             '이미 가입된 이메일입니다.\n해당 이메일로 이미 가입된 계정이 있습니다.\n로그인 화면으로 이동하시겠습니까?'
           );
@@ -130,7 +130,7 @@ export default function SignUpScreen() {
       } else if (error.code === 'auth/weak-password' || error.message === '비밀번호가 너무 약합니다.') {
         console.log('비밀번호 약함 모달 표시 시도...'); // 디버깅용 로그
         
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web') {
           window.alert('비밀번호가 너무 짧습니다.\n비밀번호는 최소 6자리 이상 입력해주세요.');
         } else {
           Alert.alert(
@@ -147,7 +147,7 @@ export default function SignUpScreen() {
       } else if (error.code === 'auth/invalid-email' || error.message === '유효하지 않은 이메일 형식입니다.') {
         console.log('이메일 형식 오류 모달 표시 시도...'); // 디버깅용 로그
         
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web') {
           window.alert('이메일 형식 오류\n올바른 이메일 형식을 입력해주세요.');
         } else {
           Alert.alert(
@@ -164,7 +164,7 @@ export default function SignUpScreen() {
       } else {
         console.log('기타 오류 모달 표시 시도...'); // 디버깅용 로그
         
-        if (typeof window !== 'undefined') {
+        if (Platform.OS === 'web') {
           window.alert('회원가입 실패\n' + (error.message || '알 수 없는 오류가 발생했습니다.'));
         } else {
           Alert.alert('회원가입 실패', error.message || '알 수 없는 오류가 발생했습니다.');
