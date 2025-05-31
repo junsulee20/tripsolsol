@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
 import { Ionicons } from '@expo/vector-icons';
+import { FirebaseError } from 'firebase/app';
 
 export default function SignUpScreen() {
   const [name, setName] = useState('');
@@ -24,22 +25,47 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('오류', '모든 필드를 입력해주세요.');
+      if (typeof window !== 'undefined') {
+        window.alert('모든 필드를 입력해주세요.');
+      } else {
+        Alert.alert('오류', '모든 필드를 입력해주세요.');
+      }
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('오류', '비밀번호가 일치하지 않습니다.');
+      if (typeof window !== 'undefined') {
+        window.alert('비밀번호가 일치하지 않습니다.');
+      } else {
+        Alert.alert('오류', '비밀번호가 일치하지 않습니다.');
+      }
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('오류', '비밀번호는 최소 6자 이상이어야 합니다.');
+      if (typeof window !== 'undefined') {
+        window.alert('비밀번호가 너무 짧습니다.\n비밀번호는 최소 6자리 이상 입력해주세요.');
+      } else {
+        Alert.alert(
+          '비밀번호가 너무 짧습니다',
+          '비밀번호는 최소 6자리 이상 입력해주세요.',
+          [
+            {
+              text: '확인',
+              style: 'default'
+            }
+          ]
+        );
+      }
       return;
     }
 
     if (!agreeTerms) {
-      Alert.alert('오류', '이용약관과 개인정보 처리방침에 동의해주세요.');
+      if (typeof window !== 'undefined') {
+        window.alert('이용약관과 개인정보 처리방침에 동의해주세요.');
+      } else {
+        Alert.alert('오류', '이용약관과 개인정보 처리방침에 동의해주세요.');
+      }
       return;
     }
 
@@ -47,17 +73,103 @@ export default function SignUpScreen() {
     try {
       const user = await signUp(email, password, name);
       console.log('회원가입 성공:', user); // 디버깅용 로그
-      Alert.alert('성공', '회원가입이 완료되었습니다!', [
-        { 
-          text: '확인', 
-          onPress: () => {
-            router.replace('/travel/list');
-          }
+      
+      if (typeof window !== 'undefined') {
+        const proceed = window.confirm('회원가입 완료!\n환영합니다! 회원가입이 완료되었습니다.\n메인 페이지로 이동하시겠습니까?');
+        if (proceed) {
+          router.replace('/travel/list');
         }
-      ]);
+      } else {
+        Alert.alert(
+          '회원가입 완료',
+          '환영합니다! 회원가입이 완료되었습니다.',
+          [
+            { 
+              text: '시작하기', 
+              onPress: () => {
+                router.replace('/travel/list');
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+      }
     } catch (error: any) {
       console.error('회원가입 에러:', error); // 디버깅용 로그
-      Alert.alert('회원가입 실패', error.message);
+      console.error('에러 메시지:', error.message); // 에러 메시지 확인
+      console.error('에러 코드:', error.code); // Firebase 에러 코드 확인
+      
+      if (error.code === 'auth/email-already-in-use' || error.message === '이미 사용 중인 이메일입니다.') {
+        console.log('이미 가입된 이메일 모달 표시 시도...'); // 디버깅용 로그
+        
+        // 웹 환경에서는 window.alert 사용
+        if (typeof window !== 'undefined') {
+          const userChoice = window.confirm(
+            '이미 가입된 이메일입니다.\n해당 이메일로 이미 가입된 계정이 있습니다.\n로그인 화면으로 이동하시겠습니까?'
+          );
+          if (userChoice) {
+            router.replace('/auth/login');
+          }
+        } else {
+          // 모바일 환경에서는 Alert 사용
+          Alert.alert(
+            '이미 가입된 이메일',
+            '해당 이메일로 이미 가입된 계정이 있습니다. 로그인을 시도해주세요.',
+            [
+              {
+                text: '로그인하기',
+                onPress: () => router.replace('/auth/login')
+              },
+              {
+                text: '다른 이메일 사용',
+                style: 'cancel'
+              }
+            ]
+          );
+        }
+      } else if (error.code === 'auth/weak-password' || error.message === '비밀번호가 너무 약합니다.') {
+        console.log('비밀번호 약함 모달 표시 시도...'); // 디버깅용 로그
+        
+        if (typeof window !== 'undefined') {
+          window.alert('비밀번호가 너무 짧습니다.\n비밀번호는 최소 6자리 이상 입력해주세요.');
+        } else {
+          Alert.alert(
+            '비밀번호가 너무 짧습니다',
+            '비밀번호는 최소 6자리 이상 입력해주세요.',
+            [
+              {
+                text: '확인',
+                style: 'default'
+              }
+            ]
+          );
+        }
+      } else if (error.code === 'auth/invalid-email' || error.message === '유효하지 않은 이메일 형식입니다.') {
+        console.log('이메일 형식 오류 모달 표시 시도...'); // 디버깅용 로그
+        
+        if (typeof window !== 'undefined') {
+          window.alert('이메일 형식 오류\n올바른 이메일 형식을 입력해주세요.');
+        } else {
+          Alert.alert(
+            '이메일 형식 오류',
+            '올바른 이메일 형식을 입력해주세요.',
+            [
+              {
+                text: '확인',
+                style: 'default'
+              }
+            ]
+          );
+        }
+      } else {
+        console.log('기타 오류 모달 표시 시도...'); // 디버깅용 로그
+        
+        if (typeof window !== 'undefined') {
+          window.alert('회원가입 실패\n' + (error.message || '알 수 없는 오류가 발생했습니다.'));
+        } else {
+          Alert.alert('회원가입 실패', error.message || '알 수 없는 오류가 발생했습니다.');
+        }
+      }
     } finally {
       setLoading(false);
     }
