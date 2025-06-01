@@ -82,7 +82,7 @@ export default function SignUpScreen() {
           text: '시작하기', 
           onPress: () => {
             hideModal();
-            router.replace('/travel/list');
+            router.replace('/(tabs)/travel');
           },
           style: 'primary'
         }

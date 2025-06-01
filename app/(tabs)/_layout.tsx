@@ -29,13 +29,6 @@ export default function TabLayout() {
         }),
       }}>
       <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="travel"
         options={{
           title: '여행',
@@ -47,7 +40,6 @@ export default function TabLayout() {
         options={{
           title: '비용 추가',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
-          href: '/travel/list',
         }}
       />
       <Tabs.Screen
@@ -55,7 +47,32 @@ export default function TabLayout() {
         options={{
           title: '설정',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-          href: '/profile/settings',
+        }}
+      />
+      
+      {/* Hidden tabs for other pages */}
+      <Tabs.Screen
+        name="trip"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="qr"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="groups"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>
