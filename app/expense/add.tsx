@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import TabLayout from '../../components/TabLayout';
 
 const mockGroups = [
   { id: '1', name: '21학번 동기 유럽 여행', icon: 'airplane', color: '#4A90E2' },
@@ -37,7 +38,7 @@ export default function AddExpenseScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <TabLayout>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -60,15 +61,11 @@ export default function AddExpenseScreen() {
           style={styles.groupsList}
         />
       </View>
-    </View>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

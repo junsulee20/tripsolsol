@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../config/firebase';
 import { logout } from '../../services/firebaseService';
+import TabLayout from '../../components/TabLayout';
 
 export default function SettingsScreen() {
   const [user, setUser] = useState<any>(null);
@@ -78,7 +79,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <TabLayout>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -175,15 +176,11 @@ export default function SettingsScreen() {
           <Text style={styles.footerText}>Product Day</Text>
         </View>
       </ScrollView>
-    </View>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -211,15 +208,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    padding: 20,
   },
   profileSection: {
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 20,
+    marginBottom: 32,
   },
   profileInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   avatar: {
     width: 60,
@@ -233,17 +240,17 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: 'white',
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
   },
   verifiedBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: -2,
+    right: -2,
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#27ae60',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -253,7 +260,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#333',
     marginBottom: 4,
@@ -263,28 +270,37 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   editProfileButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   section: {
-    backgroundColor: 'white',
-    marginBottom: 20,
+    marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    marginBottom: 16,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   menuIcon: {
     width: 24,
@@ -299,16 +315,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   logoutText: {
-    color: '#4A90E2',
+    color: '#e74c3c',
     fontWeight: '500',
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 32,
   },
   footerText: {
     fontSize: 12,
     color: '#999',
-    marginBottom: 2,
+    marginBottom: 4,
   },
 }); 
