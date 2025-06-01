@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { createTrip, searchUserByName, getCurrentUser } from '../../services/firebaseService';
 import { User } from '../../types';
+import TabLayout from '../../components/TabLayout';
 
 // 웹 환경에서 Alert를 위한 유틸리티 함수
 const showAlert = (title: string, message: string) => {
@@ -326,206 +327,208 @@ export default function CreateTripScreen() {
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#2c3e50" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>새 여행 만들기</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <TabLayout>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#2c3e50" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>새 여행 만들기</Text>
+          <View style={styles.placeholder} />
+        </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>여행 이름 *</Text>
-            <TextInput
-              style={styles.input}
-              value={tripName}
-              onChangeText={setTripName}
-              placeholder="예: 제주도 여행"
-              maxLength={50}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>여행 이모지</Text>
-            <TextInput
-              style={styles.input}
-              value={emoji}
-              onChangeText={setEmoji}
-              placeholder="예: ✈️"
-              maxLength={2}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>여행 설명</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="여행에 대한 간단한 설명을 입력하세요"
-              multiline
-              numberOfLines={3}
-              maxLength={200}
-            />
-          </View>
-
-          {/* 날짜 입력 모드 선택 */}
-          {Platform.OS !== 'web' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <View style={styles.dateToggleContainer}>
-                <TouchableOpacity
-                  style={[styles.toggleButton, !dateInputMode && styles.toggleButtonActive]}
-                  onPress={() => setDateInputMode(false)}
-                >
-                  <Ionicons name="calendar" size={16} color={!dateInputMode ? 'white' : '#4A90E2'} />
-                  <Text style={[styles.toggleText, !dateInputMode && styles.toggleTextActive]}>
-                    달력 선택
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleButton, dateInputMode && styles.toggleButtonActive]}
-                  onPress={() => {
-                    setDateInputMode(true);
-                    setStartDateInput(formatDateForInput(startDate));
-                    setEndDateInput(formatDateForInput(endDate));
-                  }}
-                >
-                  <Ionicons name="create" size={16} color={dateInputMode ? 'white' : '#4A90E2'} />
-                  <Text style={[styles.toggleText, dateInputMode && styles.toggleTextActive]}>
-                    직접 입력
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.dateContainer}>
-            {Platform.OS === 'web' ? (
-              // 웹에서는 HTML input 사용
-              <>
-                {renderWebDateInput('시작일', startDate, startDateInput, handleStartDateInputChange, true)}
-                {renderWebDateInput('종료일', endDate, endDateInput, handleEndDateInputChange, false)}
-              </>
-            ) : dateInputMode ? (
-              // 모바일에서 수동 입력 모드
-              <>
-                {renderManualDateInput('시작일', startDateInput, handleStartDateInputChange, 'YYYY-MM-DD')}
-                {renderManualDateInput('종료일', endDateInput, handleEndDateInputChange, 'YYYY-MM-DD')}
-              </>
-            ) : (
-              // 모바일에서 달력 선택 모드
-              <>
-                <View style={styles.dateInputContainer}>
-                  <Text style={styles.label}>시작일 *</Text>
-                  <TouchableOpacity
-                    style={styles.dateInput}
-                    onPress={() => setShowStartPicker(true)}
-                  >
-                    <Text style={styles.dateText}>
-                      {startDate.toLocaleDateString('ko-KR')}
-                    </Text>
-                    <Ionicons name="calendar" size={20} color="#4A90E2" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.dateInputContainer}>
-                  <Text style={styles.label}>종료일 *</Text>
-                  <TouchableOpacity
-                    style={styles.dateInput}
-                    onPress={() => setShowEndPicker(true)}
-                  >
-                    <Text style={styles.dateText}>
-                      {endDate.toLocaleDateString('ko-KR')}
-                    </Text>
-                    <Ionicons name="calendar" size={20} color="#4A90E2" />
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-
-          {Platform.OS !== 'web' && showStartPicker && (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display="default"
-              onChange={onStartDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-
-          {Platform.OS !== 'web' && showEndPicker && (
-            <DateTimePicker
-              value={endDate}
-              mode="date"
-              display="default"
-              onChange={onEndDateChange}
-              minimumDate={startDate}
-            />
-          )}
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>참가자 추가</Text>
-            <View style={styles.searchContainer}>
+              <Text style={styles.label}>여행 이름 *</Text>
               <TextInput
-                style={styles.searchInput}
-                value={newParticipantName}
-                onChangeText={(text) => {
-                  setNewParticipantName(text);
-                  searchParticipants(text);
-                }}
-                placeholder="닉네임으로 검색"
+                style={styles.input}
+                value={tripName}
+                onChangeText={setTripName}
+                placeholder="예: 제주도 여행"
                 maxLength={50}
               />
-              {searchLoading && (
-                <Text style={styles.searchLoading}>검색 중...</Text>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>여행 이모지</Text>
+              <TextInput
+                style={styles.input}
+                value={emoji}
+                onChangeText={setEmoji}
+                placeholder="예: ✈️"
+                maxLength={2}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>여행 설명</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="여행에 대한 간단한 설명을 입력하세요"
+                multiline
+                numberOfLines={3}
+                maxLength={200}
+              />
+            </View>
+
+            {/* 날짜 입력 모드 선택 */}
+            {Platform.OS !== 'web' && (
+              <View style={styles.inputContainer}>
+                <View style={styles.dateToggleContainer}>
+                  <TouchableOpacity
+                    style={[styles.toggleButton, !dateInputMode && styles.toggleButtonActive]}
+                    onPress={() => setDateInputMode(false)}
+                  >
+                    <Ionicons name="calendar" size={16} color={!dateInputMode ? 'white' : '#4A90E2'} />
+                    <Text style={[styles.toggleText, !dateInputMode && styles.toggleTextActive]}>
+                      달력 선택
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.toggleButton, dateInputMode && styles.toggleButtonActive]}
+                    onPress={() => {
+                      setDateInputMode(true);
+                      setStartDateInput(formatDateForInput(startDate));
+                      setEndDateInput(formatDateForInput(endDate));
+                    }}
+                  >
+                    <Ionicons name="create" size={16} color={dateInputMode ? 'white' : '#4A90E2'} />
+                    <Text style={[styles.toggleText, dateInputMode && styles.toggleTextActive]}>
+                      직접 입력
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.dateContainer}>
+              {Platform.OS === 'web' ? (
+                // 웹에서는 HTML input 사용
+                <>
+                  {renderWebDateInput('시작일', startDate, startDateInput, handleStartDateInputChange, true)}
+                  {renderWebDateInput('종료일', endDate, endDateInput, handleEndDateInputChange, false)}
+                </>
+              ) : dateInputMode ? (
+                // 모바일에서 수동 입력 모드
+                <>
+                  {renderManualDateInput('시작일', startDateInput, handleStartDateInputChange, 'YYYY-MM-DD')}
+                  {renderManualDateInput('종료일', endDateInput, handleEndDateInputChange, 'YYYY-MM-DD')}
+                </>
+              ) : (
+                // 모바일에서 달력 선택 모드
+                <>
+                  <View style={styles.dateInputContainer}>
+                    <Text style={styles.label}>시작일 *</Text>
+                    <TouchableOpacity
+                      style={styles.dateInput}
+                      onPress={() => setShowStartPicker(true)}
+                    >
+                      <Text style={styles.dateText}>
+                        {startDate.toLocaleDateString('ko-KR')}
+                      </Text>
+                      <Ionicons name="calendar" size={20} color="#4A90E2" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.dateInputContainer}>
+                    <Text style={styles.label}>종료일 *</Text>
+                    <TouchableOpacity
+                      style={styles.dateInput}
+                      onPress={() => setShowEndPicker(true)}
+                    >
+                      <Text style={styles.dateText}>
+                        {endDate.toLocaleDateString('ko-KR')}
+                      </Text>
+                      <Ionicons name="calendar" size={20} color="#4A90E2" />
+                    </TouchableOpacity>
+                  </View>
+                </>
               )}
             </View>
 
-            {searchResults.length > 0 && (
-              <View style={styles.searchResults}>
-                <FlatList
-                  data={searchResults}
-                  renderItem={renderSearchResultItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
-              </View>
+            {Platform.OS !== 'web' && showStartPicker && (
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display="default"
+                onChange={onStartDateChange}
+                minimumDate={new Date()}
+              />
             )}
 
-            {participants.length > 0 && (
-              <View style={styles.participantsList}>
-                <Text style={styles.participantsTitle}>
-                  참가자 ({participants.length + 1}명)
-                </Text>
-                <FlatList
-                  data={participants}
-                  renderItem={renderParticipantItem}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
-              </View>
+            {Platform.OS !== 'web' && showEndPicker && (
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                display="default"
+                onChange={onEndDateChange}
+                minimumDate={startDate}
+              />
             )}
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>참가자 추가</Text>
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  value={newParticipantName}
+                  onChangeText={(text) => {
+                    setNewParticipantName(text);
+                    searchParticipants(text);
+                  }}
+                  placeholder="닉네임으로 검색"
+                  maxLength={50}
+                />
+                {searchLoading && (
+                  <Text style={styles.searchLoading}>검색 중...</Text>
+                )}
+              </View>
+
+              {searchResults.length > 0 && (
+                <View style={styles.searchResults}>
+                  <FlatList
+                    data={searchResults}
+                    renderItem={renderSearchResultItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                  />
+                </View>
+              )}
+
+              {participants.length > 0 && (
+                <View style={styles.participantsList}>
+                  <Text style={styles.participantsTitle}>
+                    참가자 ({participants.length + 1}명)
+                  </Text>
+                  <FlatList
+                    data={participants}
+                    renderItem={renderParticipantItem}
+                    keyExtractor={(item) => item.id}
+                    scrollEnabled={false}
+                  />
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.createButton, loading && styles.createButtonDisabled]}
+              onPress={handleCreateTrip}
+              disabled={loading}
+            >
+              <Text style={styles.createButtonText}>
+                {loading ? '생성 중...' : '여행 만들기'}
+              </Text>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[styles.createButton, loading && styles.createButtonDisabled]}
-            onPress={handleCreateTrip}
-            disabled={loading}
-          >
-            <Text style={styles.createButtonText}>
-              {loading ? '생성 중...' : '여행 만들기'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </TabLayout>
   );
 }
 

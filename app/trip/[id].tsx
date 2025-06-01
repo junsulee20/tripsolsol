@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import TabLayout from '../../components/TabLayout';
 
 const mockExpenses = [
   {
@@ -116,7 +117,7 @@ export default function TripDetailScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <TabLayout>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -216,15 +217,11 @@ export default function TripDetailScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

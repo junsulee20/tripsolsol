@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection } from '../../services/firebaseService';
 import { Trip } from '../../types';
+import TabLayout from '../../components/TabLayout';
 
 export default function TravelListScreen() {
   const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
@@ -165,14 +166,16 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
+      <TabLayout>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>로딩 중...</Text>
+        </View>
+      </TabLayout>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <TabLayout>
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -224,20 +227,15 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
   },
   loadingText: {
     fontSize: 16,
