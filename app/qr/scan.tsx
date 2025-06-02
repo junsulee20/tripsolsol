@@ -1,190 +1,185 @@
-import React, { useState } from 'react';
+import { BarCodeScanner, BarCodeScannerProps } from "expo-barcode-scanner";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
+  Alert,
   StyleSheet,
-  Alert
-} from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  Text,
+  View,
+  TouchableOpacity,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
+const Scanner = BarCodeScanner as unknown as
+  React.ComponentType<BarCodeScannerProps>;
+
+/* --------- Timestamp → Date 포맷터 --------- */
+type FBTimestamp =
+  | { seconds: number; nanoseconds: number } // Firestore JS SDK v9+
+  | { _seconds: number; _nanoseconds: number }; // v8 (웹 compat)
+
+const toDate = (ts: FBTimestamp): Date => {
+  const s = "seconds" in ts ? ts.seconds : ts._seconds;
+  return new Date(s * 1000);
+};
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/* ------------------------------------------ */
 
 export default function QRScanScreen() {
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  const handleScan = () => {
+  /* 카메라 권한 */
+  useEffect(() => {
+    (async () => {
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPermission(status === "granted");
+    })();
+  }, []);
+
+  /* 스캔 결과 */
+  const onScanned = ({ data }: { data: string }) => {
+    if (scanning) return;
     setScanning(true);
-    // 실제 QR 스캔 로직
-    setTimeout(() => {
-      setScanning(false);
-      Alert.alert('QR 코드 스캔', 'QR 코드가 스캔되었습니다!');
-    }, 2000);
+
+    try {
+      const qrData = JSON.parse(data);
+
+      if (qrData.type === "group" && qrData.groupId) {
+        /* (선택) Timestamp → Date 포맷 */
+        let dateInfo = "";
+        if (qrData.createdAt) {
+          const d = formatDate(toDate(qrData.createdAt));
+          dateInfo = `\n생성: ${d}`;
+        }
+        if (qrData.expiresAt) {
+          const d = formatDate(toDate(qrData.expiresAt));
+          dateInfo += `\n만료: ${d}`;
+        }
+
+        Alert.alert(
+          "그룹 참여",
+          `${qrData.groupName ?? "알 수 없는 그룹"}에 참여하시겠습니까?${dateInfo}`,
+          [
+            {
+              text: "취소",
+              style: "cancel",
+              onPress: () => setScanning(false),
+            },
+            {
+              text: "참여하기",
+              onPress: () =>
+                router.push({
+                  pathname: "/groups",
+                  params: { id: qrData.groupId },
+                }),
+            },
+          ]
+        );
+      } else {
+        throw new Error("Invalid QR code");
+      }
+    } catch {
+      Alert.alert("오류", "유효하지 않은 QR 코드입니다.", [
+        { text: "다시 스캔", onPress: () => setScanning(false) },
+      ]);
+    }
   };
+
+  /* --------- UI 렌더 --------- */
+  if (hasPermission === null)
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>카메라 권한 확인 중...</Text>
+      </View>
+    );
+  if (hasPermission === false)
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>카메라 권한이 필요합니다</Text>
+        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
+          <Text style={styles.buttonText}>뒤로 가기</Text>
+        </TouchableOpacity>
+      </View>
+    );
 
   return (
     <View style={styles.container}>
+      {/* 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>QR 코드 스캔</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.title}>QR 코드를 스캔해주세요</Text>
-        
-        <View style={styles.scanArea}>
-          <View style={styles.scanFrame}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-            
-            {scanning && (
-              <View style={styles.scanLine} />
-            )}
-          </View>
-        </View>
+      {/* 스캐너 */}
+      <Scanner
+        style={StyleSheet.absoluteFillObject}
+        barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
+        onBarCodeScanned={scanning ? undefined : onScanned}
+      />
 
-        <Text style={styles.instruction}>
-          QR 코드를 화면 중앙에 맞춰주세요
-        </Text>
+      {/* 가이드 오버레이 */}
+      <View style={styles.overlay}>
+        <View style={styles.scanArea} />
+      </View>
 
-        <TouchableOpacity 
-          style={[styles.scanButton, scanning && styles.scanButtonActive]} 
-          onPress={handleScan}
-          disabled={scanning}
-        >
-          <Ionicons 
-            name={scanning ? "stop" : "scan"} 
-            size={24} 
-            color="white" 
-          />
-          <Text style={styles.scanButtonText}>
-            {scanning ? '스캔 중...' : '스캔 시작'}
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.footer}>
+        <Text style={styles.instruction}>그룹 초대 QR 코드를 스캔해주세요</Text>
       </View>
     </View>
   );
 }
 
+/* ------------- Styles (동일) ------------- */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  container: { flex: 1, backgroundColor: "#000" },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: 'white',
-  },
-  placeholder: {
-    width: 32,
-  },
-  content: {
+  backButton: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: "#fff" },
+  placeholder: { width: 32 },
+  overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: 'white',
-    marginBottom: 40,
-    textAlign: 'center',
-  },
-  scanArea: {
-    width: 250,
-    height: 250,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  scanFrame: {
-    width: 200,
-    height: 200,
-    position: 'relative',
-  },
-  corner: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderColor: '#4A90E2',
-    borderWidth: 3,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-  },
-  scanLine: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#4A90E2',
-    opacity: 0.8,
-  },
+  scanArea: { width: 250, height: 250, borderWidth: 2, borderColor: "#fff" },
+  footer: { position: "absolute", bottom: 40, left: 0, right: 0, alignItems: "center" },
   instruction: {
+    color: "#fff",
     fontSize: 16,
-    color: 'white',
-    textAlign: 'center',
-    marginBottom: 40,
-    opacity: 0.8,
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 10,
+    borderRadius: 8,
   },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+  loadingText: { color: "#fff", fontSize: 16, textAlign: "center", marginTop: 20 },
+  button: {
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 20,
   },
-  scanButtonActive: {
-    backgroundColor: '#FF6B6B',
-  },
-  scanButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-}); 
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+});

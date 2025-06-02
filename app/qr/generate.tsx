@@ -4,93 +4,205 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert
+  Alert,
+  ScrollView,
+  Share
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../config/firebase';
+import QRCode from 'react-native-qrcode-svg';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import * as Clipboard from 'expo-clipboard';
+import { Trip } from '../../types';
 
 export default function QRGenerateScreen() {
-  const [user, setUser] = useState<any>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [loading, setLoading] = useState(true);
+  const toDate = (value: any): Date => {
+    if (value instanceof Date) return value;
+    if (value instanceof Timestamp) return value.toDate();
+    if (value?.toDate) return value.toDate();        // compat Timestamp
+    if (typeof value === "number" || typeof value === "string")
+      return new Date(value);
+    throw new Error("지원하지 않는 날짜 형식");
+  };
 
   useEffect(() => {
-    if (auth.currentUser) {
-      setUser(auth.currentUser);
-    }
+    fetchTrips();
   }, []);
 
-  const handleShare = () => {
-    Alert.alert('공유', 'QR 코드 공유 기능은 준비 중입니다.');
+  const fetchTrips = async () => {
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) return;
+
+      const tripsRef = collection(db, 'trips');
+      const q = query(tripsRef, where('participants', 'array-contains', userId));
+      const querySnapshot = await getDocs(q);
+      
+      const tripsList = querySnapshot.docs.map(doc => {
+        const data = doc.data() as Trip;
+        return {
+          ...data,
+          id: doc.id,
+          startDate: toDate(data.startDate),
+          endDate:   toDate(data.endDate),
+        };
+      });
+      setTrips(tripsList);
+    } catch (error) {
+      Alert.alert('오류', '여행 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = () => {
-    Alert.alert('저장', 'QR 코드가 갤러리에 저장되었습니다.');
+  const handleTripSelect = (trip: Trip) => {
+    setSelectedTrip(trip);
   };
 
-  const getUserName = () => {
-    return user?.displayName || 'Victoria';
+  const handleShare = async () => {
+    if (!selectedTrip) return;
+
+    const inviteLink = `tripsolsol://trip/${selectedTrip.id}`;
+    try {
+      await Share.share({
+        message: `${selectedTrip.name} 여행에 초대합니다.\n${inviteLink}`,
+      });
+    } catch (error) {
+      Alert.alert('오류', '공유하기에 실패했습니다.');
+    }
   };
 
-  const getUserInitial = () => {
-    const name = getUserName();
-    return name.charAt(0).toUpperCase();
+  const handleCopyLink = async () => {
+    if (!selectedTrip) return;
+
+    const inviteLink = `tripsolsol://trip/${selectedTrip.id}`;
+    await Clipboard.setStringAsync(inviteLink);
+    Alert.alert('알림', '초대 링크가 복사되었습니다.');
   };
 
+  const getQRData = () => {
+    if (!selectedTrip) return '';
+    return JSON.stringify({
+      type: 'trip',
+      tripId: selectedTrip.id,
+      tripName: selectedTrip.name
+    });
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>여행 목록을 불러오는 중...</Text>
+      </View>
+    );
+  }
+  const tripsFixed = trips.map(t => ({
+    ...t,
+    startDate: toDate(t.startDate),
+    endDate:   toDate(t.endDate),
+  }));
+
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>QR 코드 생성</Text>
+        <Text style={styles.headerTitle}>여행 초대 QR 코드</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.qrContainer}>
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getUserInitial()}</Text>
-            </View>
-            <Text style={styles.userName}>{getUserName()}</Text>
+      <ScrollView style={styles.content}>
+        {!selectedTrip ? (
+          <View style={styles.tripList}>
+            <Text style={styles.sectionTitle}>여행 선택</Text>
+            {trips.length === 0 ? (
+              <Text style={styles.emptyText}>참여 중인 여행이 없습니다.</Text>
+            ) : (
+              trips.map(trip => (
+                <TouchableOpacity
+                  key={trip.id}
+                  style={styles.tripItem}
+                  onPress={() => handleTripSelect(trip)}
+                >
+                  <View style={styles.tripHeader}>
+                    {trip.emoji && (
+                      <Text style={styles.tripEmoji}>{trip.emoji}</Text>
+                    )}
+                    <Text style={styles.tripName}>{trip.name}</Text>
+                  </View>
+                  {trip.description && (
+                    <Text style={styles.tripDescription}>{trip.description}</Text>
+                  )}
+                  <View style={styles.tripDetails}>
+                    <Text style={styles.tripDate}>
+                    {toDate(trip.startDate).toLocaleDateString()} ~
+{toDate(trip.endDate).toLocaleDateString()}
+
+                    </Text>
+                    <Text style={styles.tripCurrency}>
+                      {trip.currency} {trip.totalAmount.toLocaleString()}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
+        ) : (
+          <View style={styles.qrContainer}>
+            <View style={styles.tripHeader}>
+              {selectedTrip.emoji && (
+                <Text style={styles.tripEmoji}>{selectedTrip.emoji}</Text>
+              )}
+              <Text style={styles.tripName}>{selectedTrip.name}</Text>
+            </View>
+            
+            <View style={styles.qrCode}>
+              <QRCode
+                value={getQRData()}
+                size={200}
+                backgroundColor="white"
+              />
+            </View>
 
-          <View style={styles.qrCode}>
-            {/* QR 코드 패턴을 시뮬레이션 */}
-            <View style={styles.qrPattern}>
-              {Array.from({ length: 15 }, (_, row) => (
-                <View key={row} style={styles.qrRow}>
-                  {Array.from({ length: 15 }, (_, col) => (
-                    <View
-                      key={col}
-                      style={[
-                        styles.qrPixel,
-                        (row + col) % 3 === 0 && styles.qrPixelFilled
-                      ]}
-                    />
-                  ))}
-                </View>
-              ))}
+            <View style={styles.linkContainer}>
+              <Text style={styles.linkText}>
+                {`tripsolsol://trip/${selectedTrip.id}`}
+              </Text>
+              <TouchableOpacity 
+                style={styles.copyButton}
+                onPress={handleCopyLink}
+              >
+                <Ionicons name="copy-outline" size={20} color="#4A90E2" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actions}>
+              <TouchableOpacity 
+                style={styles.actionButton} 
+                onPress={handleShare}
+              >
+                <Ionicons name="share-outline" size={20} color="#4A90E2" />
+                <Text style={styles.actionButtonText}>공유하기</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => setSelectedTrip(null)}
+              >
+                <Ionicons name="arrow-back" size={20} color="#4A90E2" />
+                <Text style={styles.actionButtonText}>다른 여행 선택</Text>
+              </TouchableOpacity>
             </View>
           </View>
-
-          <Text style={styles.instruction}>
-            놓치지 못하시겠죠?
-          </Text>
-        </View>
-
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <Ionicons name="share-outline" size={20} color="#4A90E2" />
-            <Text style={styles.actionButtonText}>공유하기</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
-            <Ionicons name="download-outline" size={20} color="#4A90E2" />
-            <Text style={styles.actionButtonText}>저장하기</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -127,14 +239,80 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  tripList: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  tripItem: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tripEmoji: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  tripName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  tripDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  tripDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tripDate: {
+    fontSize: 12,
+    color: '#999',
+  },
+  tripCurrency: {
+    fontSize: 12,
+    color: '#4A90E2',
+    fontWeight: '500',
   },
   qrContainer: {
     backgroundColor: 'white',
     borderRadius: 20,
-    padding: 40,
+    padding: 24,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
@@ -144,88 +322,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
-    marginBottom: 40,
-  },
-  userInfo: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FF6B6B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
   },
   qrCode: {
-    width: 200,
-    height: 200,
     backgroundColor: 'white',
+    padding: 16,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: '#E5E5E5',
   },
-  qrPattern: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  qrRow: {
-    flex: 1,
+  linkContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    width: '100%',
   },
-  qrPixel: {
+  linkText: {
     flex: 1,
-    backgroundColor: 'white',
-    margin: 0.5,
-  },
-  qrPixelFilled: {
-    backgroundColor: '#333',
-  },
-  instruction: {
     fontSize: 14,
-    color: '#4A90E2',
-    textAlign: 'center',
+    color: '#666',
+  },
+  copyButton: {
+    padding: 8,
   },
   actions: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 12,
+    width: '100%',
   },
   actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'white',
-    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#4A90E2',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   actionButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#4A90E2',
     fontWeight: '500',
     marginLeft: 8,
   },
-}); 
+});

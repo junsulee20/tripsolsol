@@ -5,22 +5,61 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ScrollView
+  ScrollView,
+  TextInput
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../config/firebase';
-import { logout } from '../../services/firebaseService';
+import { logout, changeEmail, changePassword } from '../../services/firebaseService';
 import TabLayout from '../../components/TabLayout';
 
 export default function SettingsScreen() {
   const [user, setUser] = useState<any>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     if (auth.currentUser) {
       setUser(auth.currentUser);
     }
   }, []);
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('');
+      return false;
+    }
+    if (!emailRegex.test(email)) {
+      setEmailError('올바른 이메일 형식이 아닙니다.');
+      return false;
+    }
+    if (email === user?.email) {
+      setEmailError('현재 이메일과 동일합니다.');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) {
+      setPasswordError('');
+      return false;
+    }
+    if (password.length < 6) {
+      setPasswordError('비밀번호는 6자 이상이어야 합니다.');
+      return false;
+    }
+    setPasswordError('');
+    return true;
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -43,24 +82,45 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleEmailChange = async () => {
+    if (!validateEmail(newEmail)) {
+      return;
+    }
+
+    try {
+      await changeEmail(newEmail);
+      Alert.alert('성공', '이메일이 변경되었습니다.');
+      setShowEmailInput(false);
+      setNewEmail('');
+      setEmailError('');
+    } catch (error: any) {
+      Alert.alert('오류', error.message || '이메일 변경에 실패했습니다.');
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!validatePassword(newPassword)) {
+      return;
+    }
+
+    try {
+      await changePassword(newPassword);
+      Alert.alert('성공', '비밀번호가 변경되었습니다.');
+      setShowPasswordInput(false);
+      setNewPassword('');
+      setPasswordError('');
+      setShowPassword(false);
+    } catch (error: any) {
+      Alert.alert('오류', error.message || '비밀번호 변경에 실패했습니다.');
+    }
+  };
+
   const handleQRScan = () => {
     router.push('/qr/scan');
   };
 
   const handleQRGenerate = () => {
     router.push('/qr/generate');
-  };
-
-  const handleEmailChange = () => {
-    Alert.alert('이메일 변경', '이메일 변경 기능은 준비 중입니다.');
-  };
-
-  const handlePasswordChange = () => {
-    Alert.alert('비밀번호 변경', '비밀번호 변경 기능은 준비 중입니다.');
-  };
-
-  const handleGeneralSettings = () => {
-    Alert.alert('일반 설정', '일반 설정 기능은 준비 중입니다.');
   };
 
   const getUserInitial = () => {
@@ -103,7 +163,7 @@ export default function SettingsScreen() {
             </View>
             <TouchableOpacity 
               style={styles.editProfileButton}
-              onPress={() => router.push('/profile/edit')}
+              onPress={() => router.replace('/profile/edit')}
             >
               <Ionicons name="create-outline" size={20} color="#4A90E2" />
             </TouchableOpacity>
@@ -113,14 +173,6 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>기능</Text>
           
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/travel/list')}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="airplane-outline" size={20} color="#333" />
-            </View>
-            <Text style={styles.menuText}>여행 목록</Text>
-            <Ionicons name="chevron-forward" size={16} color="#999" />
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.menuItem} onPress={handleQRScan}>
             <View style={styles.menuIcon}>
               <Ionicons name="qr-code-outline" size={20} color="#333" />
@@ -141,29 +193,108 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>계정 설정</Text>
           
-          <TouchableOpacity style={styles.menuItem} onPress={handleEmailChange}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="mail-outline" size={20} color="#333" />
+          {showEmailInput ? (
+            <View style={styles.inputContainer}>
+              <Text style={styles.currentValue}>현재 이메일: {user?.email}</Text>
+              <TextInput
+                style={[styles.input, emailError ? styles.inputError : null]}
+                value={newEmail}
+                onChangeText={(text) => {
+                  setNewEmail(text);
+                  validateEmail(text);
+                }}
+                placeholder="새 이메일 주소"
+                placeholderTextColor="#999"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={[styles.confirmButton, !newEmail || !!emailError ? styles.buttonDisabled : null]} 
+                  onPress={handleEmailChange}
+                  disabled={!newEmail || !!emailError}
+                >
+                  <Text style={styles.confirmButtonText}>확인</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.cancelButton} 
+                  onPress={() => {
+                    setShowEmailInput(false);
+                    setNewEmail('');
+                    setEmailError('');
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>취소</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.menuText}>이메일 변경</Text>
-            <Ionicons name="chevron-forward" size={16} color="#999" />
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowEmailInput(true)}>
+              <View style={styles.menuIcon}>
+                <Ionicons name="mail-outline" size={20} color="#333" />
+              </View>
+              <Text style={styles.menuText}>이메일 변경</Text>
+              <Ionicons name="chevron-forward" size={16} color="#999" />
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity style={styles.menuItem} onPress={handlePasswordChange}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="lock-closed-outline" size={20} color="#333" />
+          {showPasswordInput ? (
+            <View style={styles.inputContainer}>
+              <View style={styles.passwordInputContainer}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
+                  value={newPassword}
+                  onChangeText={(text) => {
+                    setNewPassword(text);
+                    validatePassword(text);
+                  }}
+                  placeholder="새 비밀번호"
+                  placeholderTextColor="#999"
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity 
+                  style={styles.passwordToggle}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons 
+                    name={showPassword ? "eye-off-outline" : "eye-outline"} 
+                    size={24} 
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity 
+                  style={[styles.confirmButton, !newPassword || !!passwordError ? styles.buttonDisabled : null]} 
+                  onPress={handlePasswordChange}
+                  disabled={!newPassword || !!passwordError}
+                >
+                  <Text style={styles.confirmButtonText}>확인</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.cancelButton} 
+                  onPress={() => {
+                    setShowPasswordInput(false);
+                    setNewPassword('');
+                    setPasswordError('');
+                    setShowPassword(false);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>취소</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.menuText}>비밀번호 변경</Text>
-            <Ionicons name="chevron-forward" size={16} color="#999" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={handleGeneralSettings}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="settings-outline" size={20} color="#333" />
-            </View>
-            <Text style={styles.menuText}>일반 설정</Text>
-            <Ionicons name="chevron-forward" size={16} color="#999" />
-          </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowPasswordInput(true)}>
+              <View style={styles.menuIcon}>
+                <Ionicons name="lock-closed-outline" size={20} color="#333" />
+              </View>
+              <Text style={styles.menuText}>비밀번호 변경</Text>
+              <Ionicons name="chevron-forward" size={16} color="#999" />
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
             <Text style={[styles.menuText, styles.logoutText]}>로그아웃</Text>
@@ -317,6 +448,86 @@ const styles = StyleSheet.create({
   logoutText: {
     color: '#e74c3c',
     fontWeight: '500',
+  },
+  currentValue: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  inputError: {
+    borderColor: '#e74c3c',
+  },
+  errorText: {
+    color: '#e74c3c',
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 12,
+    padding: 4,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#BDC3C7',
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#E5E5E5',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     alignItems: 'center',
