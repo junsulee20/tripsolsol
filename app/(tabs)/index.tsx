@@ -102,7 +102,7 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.emptyTitle}>김윤정님, 환영합니다!</Text>
       <Text style={styles.emptySubtitle}>
-        groups you create or are{'\''}n'}added to will show here.
+        groups you create or are added to will show here.
       </Text>
       <TouchableOpacity
         style={styles.createGroupButton}

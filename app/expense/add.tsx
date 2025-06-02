@@ -9,28 +9,41 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getUserTrips } from '../../services/firebaseService';
+import { getUserTrips, getCurrentUser, onAuthStateChange } from '../../services/firebaseService';
 import { Trip } from '../../types';
 
 export default function AddExpenseScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    const fetchTrips = async () => {
-      try {
-        const userId = 'test-user-id'; // TODO: Get actual user ID from auth context
-        const tripsFromDB = await getUserTrips(userId);
-        setTrips(tripsFromDB);
-      } catch (error) {
-        console.error('Error fetching trips:', error);
-      } finally {
-        setLoading(false);
+    // Auth state listener 설정
+    const unsubscribe = onAuthStateChange((user) => {
+      setCurrentUser(user);
+      if (user) {
+        fetchTrips(user.uid);
+      } else {
+        // 로그인되지 않은 경우 로그인 페이지로 이동
+        router.replace('/auth/login');
       }
-    };
+    });
 
-    fetchTrips();
+    return unsubscribe;
   }, []);
+
+  const fetchTrips = async (userId: string) => {
+    try {
+      setLoading(true);
+      // 본인이 포함된 모든 여행을 가져오기
+      const tripsFromDB = await getUserTrips(userId);
+      setTrips(tripsFromDB);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSelectTrip = (trip: Trip) => {
     router.push({
@@ -45,13 +58,16 @@ export default function AddExpenseScreen() {
       onPress={() => handleSelectTrip(item)}
     >
       <View style={[styles.tripIcon, { backgroundColor: '#4A90E2' }]}>
-        <Ionicons name="airplane" size={20} color="white" />
+        <Text style={styles.tripEmoji}>{item.emoji || '✈️'}</Text>
       </View>
       <View style={styles.tripInfo}>
         <Text style={styles.tripName}>{item.name}</Text>
         <Text style={styles.tripSubtitle}>
           {item.startDate?.toLocaleDateString?.() || ''}
           {item.endDate ? ` ~ ${item.endDate.toLocaleDateString?.()}` : ''}
+        </Text>
+        <Text style={styles.participantsCount}>
+          참가자 {item.participants?.length || 0}명
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#666" />
@@ -60,6 +76,7 @@ export default function AddExpenseScreen() {
 
   return (
     <View style={styles.container}>
+      {/* 공통 네비게이션 헤더 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -78,6 +95,7 @@ export default function AddExpenseScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#4A90E2" />
+            <Text style={styles.loadingText}>여행 목록을 불러오는 중...</Text>
           </View>
         ) : trips.length > 0 ? (
           <FlatList
@@ -85,14 +103,18 @@ export default function AddExpenseScreen() {
             renderItem={renderTripItem}
             keyExtractor={item => item.id}
             style={styles.tripsList}
+            showsVerticalScrollIndicator={false}
           />
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>여행이 없습니다</Text>
+            <Ionicons name="airplane-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>참여 중인 여행이 없습니다</Text>
+            <Text style={styles.emptySubtext}>새로운 여행을 만들어보세요!</Text>
             <TouchableOpacity 
               style={styles.createTripButton}
               onPress={() => router.push('/trip/create')}
             >
+              <Ionicons name="add" size={20} color="white" />
               <Text style={styles.createTripButtonText}>새 여행 만들기</Text>
             </TouchableOpacity>
           </View>
@@ -117,6 +139,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   backButton: {
     width: 32,
@@ -138,7 +168,7 @@ const styles = StyleSheet.create({
   },
   instructionContainer: {
     backgroundColor: '#E3F2FD',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 24,
   },
@@ -153,26 +183,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 40,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 18,
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  emptySubtext: {
+    fontSize: 14,
     color: '#666',
-    marginBottom: 16,
+    marginBottom: 24,
+    textAlign: 'center',
   },
   createTripButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#4A90E2',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 25,
   },
   createTripButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
+    marginLeft: 8,
   },
   tripsList: {
     flex: 1,
@@ -187,37 +234,40 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 3.84,
     elevation: 2,
   },
   tripIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+  },
+  tripEmoji: {
+    fontSize: 24,
   },
   tripInfo: {
     flex: 1,
   },
   tripName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
     marginBottom: 4,
   },
   tripSubtitle: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 2,
   },
-  percentageInput: {
-    // Add appropriate styles for percentage input
-  },
-  amountInput: {
-    // Add appropriate styles for amount input
+  participantsCount: {
+    fontSize: 12,
+    color: '#4A90E2',
+    fontWeight: '500',
   },
 }); 
