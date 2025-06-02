@@ -4,6 +4,19 @@ export interface User {
   name: string;
   profileImage?: string;
   createdAt: Date;
+  settings?: {
+    displayName?: string;
+    notifications?: {
+      email?: boolean;
+      push?: boolean;
+      tripUpdates?: boolean;
+      expenseUpdates?: boolean;
+      settlementUpdates?: boolean;
+    };
+    darkMode?: boolean;
+    locationServices?: boolean;
+    // 추가 설정이 필요한 경우 여기에 추가
+  };
 }
 
 export interface Trip {

@@ -2,7 +2,7 @@ import { getApp, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-
+import { Timestamp } from "firebase/firestore";
 // Firebase 설정
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -12,6 +12,14 @@ const firebaseConfig = {
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
+};
+const toDate = (value: any): Date => {
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value.toDate();
+  if (value?.toDate) return value.toDate();        // compat Timestamp
+  if (typeof value === "number" || typeof value === "string")
+    return new Date(value);
+  throw new Error("지원하지 않는 날짜 형식");
 };
 
 // Firebase 초기화

@@ -6,7 +6,9 @@ import {
   updateProfile,
   onAuthStateChanged,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  updateEmail as fbUpdateEmail,
+  updatePassword as fbUpdatePassword
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import {
@@ -25,6 +27,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // Mock data
 const mockTrips: Trip[] = [
@@ -46,53 +49,60 @@ const mockTrips: Trip[] = [
 // Auth Services
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
   try {
-    console.log('Starting signup process...');
-    // Set persistence to LOCAL to keep user logged in
-    await setPersistence(auth, browserLocalPersistence);
-    console.log('Persistence set to LOCAL');
+    console.log('회원가입 시도:', email);
     
+    // 이메일 형식 검증
+    if (!email || !email.includes('@')) {
+      throw new Error('유효한 이메일 주소를 입력해주세요.');
+    }
+
+    // 비밀번호 길이 검증
+    if (!password || password.length < 6) {
+      throw new Error('비밀번호는 6자 이상이어야 합니다.');
+    }
+
+    // 이름 검증
+    if (!name || name.trim().length === 0) {
+      throw new Error('이름을 입력해주세요.');
+    }
+
+    // 회원가입 시도
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    console.log('User created in Firebase Auth:', userCredential.user.uid);
-    
+    console.log('회원가입 성공:', userCredential.user.uid);
+
     const user: User = {
       id: userCredential.user.uid,
       email,
-      name,
+      name: name.trim(),
       createdAt: new Date()
     };
-    
-    // Create user document in Firestore with the same ID as auth uid
+
+    // Firestore에 사용자 정보 저장
     await setDoc(doc(db, 'users', userCredential.user.uid), user);
-    console.log('User document created in Firestore');
-    
-    // Update user profile with display name
+    console.log('Firestore 사용자 정보 저장 완료');
+
+    // 프로필 이름 업데이트
     await updateProfile(userCredential.user, {
-      displayName: name
+      displayName: name.trim()
     });
-    console.log('User profile updated with display name');
-    
+    console.log('프로필 이름 업데이트 완료');
+
     return user;
   } catch (error: any) {
-    console.error('Signup error:', error);
+    console.error('회원가입 오류:', error);
     if (error instanceof FirebaseError) {
-      const errorMessage = (() => {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
-            return '이미 사용 중인 이메일입니다.';
-          case 'auth/invalid-email':
-            return '유효하지 않은 이메일 형식입니다.';
-          case 'auth/operation-not-allowed':
-            return '이메일/비밀번호 로그인이 비활성화되어 있습니다.';
-          case 'auth/weak-password':
-            return '비밀번호가 너무 약합니다.';
-          default:
-            return '회원가입 중 오류가 발생했습니다.';
-        }
-      })();
-      
-      const customError = new FirebaseError(error.code, errorMessage);
-      customError.stack = error.stack;
-      throw customError;
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          throw new Error('이미 사용 중인 이메일입니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/operation-not-allowed':
+          throw new Error('이메일/비밀번호 회원가입이 비활성화되어 있습니다.');
+        case 'auth/weak-password':
+          throw new Error('비밀번호가 너무 약합니다.');
+        default:
+          throw new Error('회원가입 중 오류가 발생했습니다.');
+      }
     }
     throw error;
   }
@@ -100,25 +110,38 @@ export const signUp = async (email: string, password: string, name: string): Pro
 
 export const signIn = async (email: string, password: string): Promise<FirebaseUser> => {
   try {
-    console.log('Starting signin process...');
-    // Set persistence to LOCAL to keep user logged in
-    await setPersistence(auth, browserLocalPersistence);
-    console.log('Persistence set to LOCAL');
+    console.log('로그인 시도:', email);
     
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log('User signed in to Firebase Auth:', userCredential.user.uid);
-    
-    // Get user data from Firestore
-    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-    console.log('Firestore user document exists:', userDoc.exists());
-    
-    if (!userDoc.exists()) {
-      throw new Error('사용자 정보를 찾을 수 없습니다.');
+    // 이메일 형식 검증
+    if (!email || !email.includes('@')) {
+      throw new Error('유효한 이메일 주소를 입력해주세요.');
     }
-    
+
+    // 비밀번호 길이 검증
+    if (!password || password.length < 6) {
+      throw new Error('비밀번호는 6자 이상이어야 합니다.');
+    }
+
+    // 로그인 시도
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log('로그인 성공:', userCredential.user.uid);
+
+    // Firestore에서 사용자 정보 확인
+    const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+    if (!userDoc.exists()) {
+      console.log('Firestore에 사용자 정보가 없습니다. 생성합니다.');
+      // Firestore에 사용자 정보 생성
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        id: userCredential.user.uid,
+        email: email,
+        name: userCredential.user.displayName || email.split('@')[0],
+        createdAt: new Date()
+      });
+    }
+
     return userCredential.user;
   } catch (error: any) {
-    console.error('Signin error:', error);
+    console.error('로그인 오류:', error);
     if (error instanceof FirebaseError) {
       switch (error.code) {
         case 'auth/invalid-email':
@@ -129,6 +152,8 @@ export const signIn = async (email: string, password: string): Promise<FirebaseU
           throw new Error('존재하지 않는 계정입니다.');
         case 'auth/wrong-password':
           throw new Error('비밀번호가 일치하지 않습니다.');
+        case 'auth/too-many-requests':
+          throw new Error('너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요.');
         default:
           throw new Error('로그인 중 오류가 발생했습니다.');
       }
@@ -364,4 +389,119 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
     userId,
     amount: Math.round(amount * 100) / 100 // Round to 2 decimal places
   }));
+};
+
+// User Profile Update
+export const updateUserProfile = async (updates: { displayName?: string; photoURL?: string }): Promise<void> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('사용자가 로그인되어 있지 않습니다.');
+    }
+
+    console.log('Firebase Auth 프로필 업데이트 시작...');
+    // Firebase Auth 프로필 업데이트
+    await updateProfile(user, {
+      displayName: updates.displayName,
+      photoURL: updates.photoURL
+    });
+    console.log('Firebase Auth 프로필 업데이트 완료');
+
+    console.log('Firestore 사용자 문서 업데이트 시작...');
+    // Firestore 사용자 문서 업데이트
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, {
+      name: updates.displayName,
+      photoURL: updates.photoURL,
+      updatedAt: new Date()
+    });
+    console.log('Firestore 사용자 문서 업데이트 완료');
+  } catch (error) {
+    console.error('프로필 업데이트 중 오류 발생:', error);
+    throw error;
+  }
+};
+
+export const changeEmail = async (newEmail: string): Promise<void> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    await fbUpdateEmail(user, newEmail);
+    
+    // Firestore 사용자 문서 업데이트
+    await updateDoc(doc(db, 'users', user.uid), {
+      email: newEmail
+    });
+  } catch (error: any) {
+    console.error('Error updating email:', error);
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          throw new Error('이미 사용 중인 이메일입니다.');
+        case 'auth/invalid-email':
+          throw new Error('유효하지 않은 이메일 형식입니다.');
+        case 'auth/requires-recent-login':
+          throw new Error('보안을 위해 다시 로그인해주세요.');
+        default:
+          throw new Error('이메일 변경 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
+};
+
+export const changePassword = async (newPassword: string): Promise<void> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    await fbUpdatePassword(user, newPassword);
+  } catch (error: any) {
+    console.error('Error updating password:', error);
+    if (error instanceof FirebaseError) {
+      switch (error.code) {
+        case 'auth/weak-password':
+          throw new Error('비밀번호가 너무 약합니다.');
+        case 'auth/requires-recent-login':
+          throw new Error('보안을 위해 다시 로그인해주세요.');
+        default:
+          throw new Error('비밀번호 변경 중 오류가 발생했습니다.');
+      }
+    }
+    throw error;
+  }
+};
+
+// 이미지 업로드 함수 추가
+export const uploadProfileImage = async (uri: string, userId: string): Promise<string> => {
+  try {
+    console.log('이미지 URI:', uri);
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error('이미지를 불러올 수 없습니다.');
+    }
+    
+    const blob = await response.blob();
+    console.log('Blob 생성 완료:', blob.size, 'bytes');
+    
+    const storage = getStorage();
+    const storageRef = ref(storage, `profile_images/${userId}`);
+    
+    console.log('Storage 업로드 시작...');
+    await uploadBytes(storageRef, blob);
+    console.log('Storage 업로드 완료');
+    
+    const downloadURL = await getDownloadURL(storageRef);
+    console.log('다운로드 URL 획득:', downloadURL);
+    
+    return downloadURL;
+  } catch (error) {
+    console.error('이미지 업로드 중 오류 발생:', error);
+    throw new Error('프로필 이미지 업로드에 실패했습니다.');
+  }
 }; 
