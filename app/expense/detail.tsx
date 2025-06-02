@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import TabLayout from '../../components/TabLayout';
 
 const members = [
   { id: '1', name: '김윤정', avatar: '김', amount: 0, percentage: 25 },
@@ -154,105 +155,107 @@ export default function ExpenseDetailScreen() {
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>정산 추가 하기</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.tripInfo}>
-          <View style={styles.tripIcon}>
-            <Ionicons name="airplane" size={20} color="white" />
-          </View>
-          <Text style={styles.tripName}>21학번 동기 유럽 여행</Text>
+    <TabLayout>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>정산 추가 하기</Text>
+          <View style={styles.placeholder} />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>정산 방식을 선택해주세요</Text>
-          <View style={styles.paidByContainer}>
-            <Text style={styles.label}>누가 결제했나요?</Text>
-            <View style={styles.paidBySelector}>
-              <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(paidBy) }]}>
-                <Text style={styles.memberAvatarText}>김</Text>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.tripInfo}>
+            <View style={styles.tripIcon}>
+              <Ionicons name="airplane" size={20} color="white" />
+            </View>
+            <Text style={styles.tripName}>21학번 동기 유럽 여행</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>정산 방식을 선택해주세요</Text>
+            <View style={styles.paidByContainer}>
+              <Text style={styles.label}>누가 결제했나요?</Text>
+              <View style={styles.paidBySelector}>
+                <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(paidBy) }]}>
+                  <Text style={styles.memberAvatarText}>김</Text>
+                </View>
+                <Text style={styles.paidByName}>{paidBy}</Text>
               </View>
-              <Text style={styles.paidByName}>{paidBy}</Text>
             </View>
-          </View>
 
-          <Text style={styles.label}>어떻게 정산하고 싶으신가요?</Text>
-          <View style={styles.splitMethodsContainer}>
-            {splitMethods.map(renderSplitMethodItem)}
-          </View>
-
-          {splitMethod === 'custom' && (
-            <View style={styles.membersContainer}>
-              <TouchableOpacity style={styles.expandButton}>
-                <Ionicons name="chevron-down" size={20} color="#4A90E2" />
-              </TouchableOpacity>
-              {memberAmounts.map(renderMemberItem)}
+            <Text style={styles.label}>어떻게 정산하고 싶으신가요?</Text>
+            <View style={styles.splitMethodsContainer}>
+              {splitMethods.map(renderSplitMethodItem)}
             </View>
-          )}
 
-          {splitMethod === 'unequal' && (
-            <View style={styles.membersContainer}>
-              {memberAmounts.map(renderMemberItem)}
-            </View>
-          )}
-
-          {splitMethod === 'equal' && (
-            <View style={styles.membersContainer}>
-              {memberAmounts.map(renderMemberItem)}
-            </View>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>내용을 작성해주세요</Text>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>제목</Text>
-            <TextInput
-              style={styles.input}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="어떤 항목인지 입력해주세요"
-            />
-          </View>
-
-          <View style={styles.amountContainer}>
-            <Text style={styles.label}>화폐 / 금액</Text>
-            <View style={styles.amountInputContainer}>
-              <View style={styles.currencySelector}>
-                <Text style={styles.currencyText}>{currency}</Text>
+            {splitMethod === 'custom' && (
+              <View style={styles.membersContainer}>
+                <TouchableOpacity style={styles.expandButton}>
+                  <Ionicons name="chevron-down" size={20} color="#4A90E2" />
+                </TouchableOpacity>
+                {memberAmounts.map(renderMemberItem)}
               </View>
+            )}
+
+            {splitMethod === 'unequal' && (
+              <View style={styles.membersContainer}>
+                {memberAmounts.map(renderMemberItem)}
+              </View>
+            )}
+
+            {splitMethod === 'equal' && (
+              <View style={styles.membersContainer}>
+                {memberAmounts.map(renderMemberItem)}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>내용을 작성해주세요</Text>
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>제목</Text>
               <TextInput
-                style={styles.amountInput}
-                value={totalAmount}
-                onChangeText={setTotalAmount}
-                placeholder="3.00"
-                keyboardType="numeric"
+                style={styles.input}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="어떤 항목인지 입력해주세요"
               />
             </View>
-          </View>
-        </View>
 
-        <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={loading}
-        >
-          <Text style={styles.saveButtonText}>
-            {loading ? '저장 중...' : '저장'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <View style={styles.amountContainer}>
+              <Text style={styles.label}>화폐 / 금액</Text>
+              <View style={styles.amountInputContainer}>
+                <View style={styles.currencySelector}>
+                  <Text style={styles.currencyText}>{currency}</Text>
+                </View>
+                <TextInput
+                  style={styles.amountInput}
+                  value={totalAmount}
+                  onChangeText={setTotalAmount}
+                  placeholder="3.00"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            <Text style={styles.saveButtonText}>
+              {loading ? '저장 중...' : '저장'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </TabLayout>
   );
 }
 

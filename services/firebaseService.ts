@@ -184,22 +184,129 @@ export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
   }
 };
 
+// 닉네임으로 사용자 검색
+export const searchUserByName = async (name: string): Promise<User[]> => {
+  try {
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('name', '>=', name), where('name', '<=', name + '\uf8ff'));
+    const querySnapshot = await getDocs(q);
+    
+    const users: User[] = [];
+    querySnapshot.forEach((doc) => {
+      users.push({ id: doc.id, ...doc.data() } as User);
+    });
+    
+    return users;
+  } catch (error) {
+    console.error('Error searching users by name:', error);
+    return [];
+  }
+};
+
+// Firebase 연결 테스트 함수
+export const testFirebaseConnection = async (): Promise<void> => {
+  try {
+    console.log('Testing Firebase connection...');
+    const tripsRef = collection(db, 'trips');
+    const snapshot = await getDocs(tripsRef);
+    console.log('Firebase connection successful. Total documents:', snapshot.size);
+    
+    snapshot.forEach((doc) => {
+      console.log('Document:', doc.id, doc.data());
+    });
+  } catch (error) {
+    console.error('Firebase connection failed:', error);
+  }
+};
+
 // Trip Services
 export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
-  const newTrip = {
-    ...trip,
-    id: `trip-${Date.now()}`
-  };
-  mockTrips.push(newTrip);
-  return newTrip.id;
+  try {
+    const tripData = {
+      ...trip,
+      createdAt: Timestamp.fromDate(trip.createdAt),
+      startDate: Timestamp.fromDate(trip.startDate),
+      endDate: Timestamp.fromDate(trip.endDate)
+    };
+    
+    console.log('Creating trip with data:', tripData);
+    const docRef = await addDoc(collection(db, 'trips'), tripData);
+    console.log('Trip created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating trip:', error);
+    throw new Error('여행 생성에 실패했습니다.');
+  }
 };
 
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
-  return mockTrips;
+  try {
+    console.log('Fetching trips for user:', userId);
+    
+    const tripsRef = collection(db, 'trips');
+    console.log('Trips collection reference created');
+    
+    // 복합 인덱스 문제를 피하기 위해 orderBy 없이 먼저 조회
+    const userTripsQuery = query(
+      tripsRef, 
+      where('participants', 'array-contains', userId)
+    );
+    
+    console.log('Executing query for user trips...');
+    const querySnapshot = await getDocs(userTripsQuery);
+    console.log('User trips found:', querySnapshot.size);
+    
+    const trips: Trip[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      console.log('Processing trip:', doc.id, data);
+      
+      trips.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+        startDate: data.startDate.toDate(),
+        endDate: data.endDate.toDate()
+      } as Trip);
+    });
+    
+    // 클라이언트에서 정렬 (최신순)
+    trips.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    console.log('Processed and sorted trips:', trips);
+    return trips;
+  } catch (error: any) {
+    console.error('Error getting user trips:', error);
+    console.error('Error details:', error?.message);
+    
+    // 오류가 발생하면 빈 배열 대신 더 구체적인 오류 정보를 제공
+    if (error?.code === 'failed-precondition') {
+      console.error('This might be due to missing Firestore indexes. Check Firebase console.');
+    }
+    
+    return [];
+  }
 };
 
 export const getTripById = async (tripId: string): Promise<Trip | null> => {
-  return mockTrips.find(trip => trip.id === tripId) || null;
+  try {
+    const tripDoc = await getDoc(doc(db, 'trips', tripId));
+    if (tripDoc.exists()) {
+      const data = tripDoc.data();
+      return {
+        id: tripDoc.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+        startDate: data.startDate.toDate(),
+        endDate: data.endDate.toDate()
+      } as Trip;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting trip:', error);
+    return null;
+  }
 };
 
 // Expense Services
