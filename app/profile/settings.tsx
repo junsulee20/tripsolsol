@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Alert,
   ScrollView,
-  TextInput
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../../config/firebase';
-import { logout, changeEmail, changePassword } from '../../services/firebaseService';
 import TabLayout from '../../components/TabLayout';
+import { auth } from '../../config/firebase';
+import { useAuth } from '../../hooks/useAuth';
+import { logout } from '../../services/firebaseService';
 
 export default function SettingsScreen() {
+  const { updateEmail, updatePassword } = useAuth();
   const [user, setUser] = useState<any>(null);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -83,35 +85,28 @@ export default function SettingsScreen() {
   };
 
   const handleEmailChange = async () => {
-    if (!validateEmail(newEmail)) {
-      return;
-    }
+    if (!validateEmail(newEmail)) return;
 
     try {
-      await changeEmail(newEmail);
-      Alert.alert('성공', '이메일이 변경되었습니다.');
+      await updateEmail(newEmail);
       setShowEmailInput(false);
       setNewEmail('');
       setEmailError('');
     } catch (error: any) {
-      Alert.alert('오류', error.message || '이메일 변경에 실패했습니다.');
+      Alert.alert('오류', error.message || '이메일 변경 중 오류가 발생했습니다.');
     }
   };
 
   const handlePasswordChange = async () => {
-    if (!validatePassword(newPassword)) {
-      return;
-    }
+    if (!validatePassword(newPassword)) return;
 
     try {
-      await changePassword(newPassword);
-      Alert.alert('성공', '비밀번호가 변경되었습니다.');
+      await updatePassword('', newPassword);
       setShowPasswordInput(false);
       setNewPassword('');
       setPasswordError('');
-      setShowPassword(false);
     } catch (error: any) {
-      Alert.alert('오류', error.message || '비밀번호 변경에 실패했습니다.');
+      Alert.alert('오류', error.message || '비밀번호 변경 중 오류가 발생했습니다.');
     }
   };
 

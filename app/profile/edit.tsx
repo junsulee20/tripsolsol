@@ -1,24 +1,24 @@
-import React, { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Image,
+  View,
 } from "react-native";
-import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../hooks/useAuth";
 import { launchImageLibrary } from 'react-native-image-picker';
-import { updateUserProfile, uploadProfileImage } from "../../services/firebaseService";
+import { useAuth } from "../../hooks/useAuth";
+import { uploadProfileImage } from "../../services/firebaseService";
 
 export default function EditProfileScreen() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [isNameChanged, setIsNameChanged] = useState(false);
@@ -61,52 +61,34 @@ export default function EditProfileScreen() {
 
   /* 저장 버튼 핸들러 */
   const handleSave = async () => {
-    if (!name.trim()) {
-      Alert.alert("오류", "이름을 입력해주세요.");
-      return;
-    }
+    if (!name.trim()) return Alert.alert("오류", "이름을 입력해주세요.");
+    if (!user)        return Alert.alert("오류", "로그인이 필요합니다.");
 
-    if (!user) {
-      Alert.alert("오류", "로그인이 필요합니다.");
-      return;
-    }
-
+    setLoading(true);
     try {
-      setLoading(true);
-      let photoURL = profileImage;
+      let photoURL: string | undefined = profileImage || undefined;
 
-      // 새 이미지가 선택된 경우 업로드
+      // ① 새 이미지 업로드
       if (selectedImageUri) {
-        try {
-          console.log('이미지 업로드 시작...');
-          photoURL = await uploadProfileImage(selectedImageUri, user.uid);
-          console.log('이미지 업로드 완료:', photoURL);
-        } catch (error) {
-          console.error('이미지 업로드 실패:', error);
-          Alert.alert("오류", "이미지 업로드에 실패했습니다.");
-          setLoading(false);
-          return;
-        }
+        photoURL = await uploadProfileImage(selectedImageUri, user.uid);
       }
 
-      const updates: { displayName: string; photoURL?: string } = {
-        displayName: name.trim()
-      };
-      
-      if (photoURL) {
-        updates.photoURL = photoURL;
-      }
+      // ② Firebase Auth + Firestore 업데이트
+      await updateProfile({ displayName: name.trim(), photoURL });
 
-      console.log('프로필 업데이트 시작...');
-      await updateUserProfile(updates);
-      console.log('프로필 업데이트 완료');
-      
-      setLoading(false);
-      router.replace('/profile/settings');
+      // ③ 로컬 화면 즉시 갱신 & 플래그 초기화
+      setProfileImage(photoURL || null);      // 방금 올린 사진 바로 보이기
+      setSelectedImageUri(null);
+      setIsNameChanged(false);
+
+      // ④ 성공 알림 → 뒤로
+      Alert.alert("성공", "프로필이 업데이트되었습니다!", [
+        { text: "확인", onPress: () => router.back() },
+      ]);
     } catch (err: any) {
-      console.error('프로필 업데이트 오류:', err);
-      setLoading(false);
       Alert.alert("오류", err.message ?? "프로필 업데이트 실패");
+    } finally {
+      setLoading(false);
     }
   };
 

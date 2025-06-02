@@ -1,13 +1,14 @@
+import { Stack } from "expo-router";
 import React, { useState } from "react";
 import {
-    View,
-    Text,
+    Alert,
+    Platform,
     StyleSheet,
     Switch,
+    Text,
     TouchableOpacity,
-    Alert,
+    View,
 } from "react-native";
-import { Stack } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function GeneralSettingsScreen() {
@@ -108,12 +109,29 @@ const styles = StyleSheet.create({
     },
     section: {
         marginTop: 20,
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.1,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
     },
     settingItem: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         paddingVertical: 15,
+        paddingHorizontal: 15,
         borderBottomWidth: 1,
         borderBottomColor: "#eee",
     },
@@ -137,6 +155,20 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignItems: "center",
         marginTop: 30,
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.2,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 4,
+            },
+        }),
     },
     buttonText: {
         color: "#fff",

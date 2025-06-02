@@ -1,13 +1,14 @@
+import { Stack } from "expo-router";
 import React, { useState } from "react";
 import {
-    View,
+    Alert,
+    Platform,
+    StyleSheet,
     Text,
     TextInput,
-    StyleSheet,
     TouchableOpacity,
-    Alert,
+    View,
 } from "react-native";
-import { Stack } from "expo-router";
 import { useAuth } from "../../hooks/useAuth";
 
 export default function PasswordChangeScreen() {
@@ -38,8 +39,8 @@ export default function PasswordChangeScreen() {
             setCurrentPassword("");
             setNewPassword("");
             setConfirmPassword("");
-        } catch (error) {
-            Alert.alert("오류", "비밀번호 변경 중 문제가 발생했습니다.");
+        } catch (error: any) {
+            Alert.alert("오류", error.message || "비밀번호 변경 중 오류가 발생했습니다.");
         }
     };
 
@@ -94,6 +95,23 @@ const styles = StyleSheet.create({
     },
     form: {
         marginTop: 20,
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 15,
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.1,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
     },
     label: {
         fontSize: 16,
@@ -108,12 +126,27 @@ const styles = StyleSheet.create({
         padding: 12,
         fontSize: 16,
         marginBottom: 20,
+        backgroundColor: "#fff",
     },
     button: {
         backgroundColor: "#007AFF",
         padding: 15,
         borderRadius: 8,
         alignItems: "center",
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.2,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 4,
+            },
+        }),
     },
     buttonText: {
         color: "#fff",

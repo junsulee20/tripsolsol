@@ -1,33 +1,45 @@
 import { Stack } from "expo-router";
 import React, { useState } from "react";
-import { useAuth } from "@hooks/useAuth";
 import {
     Alert,
+    Platform,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
 } from "react-native";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function EmailChangeScreen() {
     const [newEmail, setNewEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const { user, updateEmail } = useAuth();
+    const [confirmEmail, setConfirmEmail] = useState("");
+    const { updateEmail } = useAuth();
 
     const handleEmailChange = async () => {
-        if (!newEmail || !password) {
+        if (!newEmail || !confirmEmail) {
             Alert.alert("오류", "모든 필드를 입력해주세요.");
             return;
         }
 
+        if (newEmail !== confirmEmail) {
+            Alert.alert("오류", "이메일이 일치하지 않습니다.");
+            return;
+        }
+
+        // 이메일 형식 검증
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newEmail)) {
+            Alert.alert("오류", "유효한 이메일 주소를 입력해주세요.");
+            return;
+        }
+
         try {
-            await updateEmail(newEmail, password);
-            Alert.alert("성공", "이메일이 성공적으로 변경되었습니다.");
+            await updateEmail(newEmail);
             setNewEmail("");
-            setPassword("");
-        } catch (error) {
-            Alert.alert("오류", "이메일 변경 중 문제가 발생했습니다.");
+            setConfirmEmail("");
+        } catch (error: any) {
+            Alert.alert("오류", error.message || "이메일 변경 중 오류가 발생했습니다.");
         }
     };
 
@@ -36,9 +48,6 @@ export default function EmailChangeScreen() {
             <Stack.Screen options={{ title: "이메일 변경" }} />
 
             <View style={styles.form}>
-                <Text style={styles.label}>현재 이메일</Text>
-                <Text style={styles.currentEmail}>{user?.email}</Text>
-
                 <Text style={styles.label}>새 이메일</Text>
                 <TextInput
                     style={styles.input}
@@ -47,15 +56,18 @@ export default function EmailChangeScreen() {
                     placeholder="새 이메일 주소"
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoComplete="email"
                 />
 
-                <Text style={styles.label}>비밀번호 확인</Text>
+                <Text style={styles.label}>이메일 확인</Text>
                 <TextInput
                     style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="현재 비밀번호"
-                    secureTextEntry
+                    value={confirmEmail}
+                    onChangeText={setConfirmEmail}
+                    placeholder="이메일 주소 확인"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
                 />
 
                 <TouchableOpacity
@@ -77,17 +89,29 @@ const styles = StyleSheet.create({
     },
     form: {
         marginTop: 20,
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        padding: 15,
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.1,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
     },
     label: {
         fontSize: 16,
         fontWeight: "600",
         marginBottom: 8,
         color: "#333",
-    },
-    currentEmail: {
-        fontSize: 16,
-        color: "#666",
-        marginBottom: 20,
     },
     input: {
         borderWidth: 1,
@@ -96,12 +120,27 @@ const styles = StyleSheet.create({
         padding: 12,
         fontSize: 16,
         marginBottom: 20,
+        backgroundColor: "#fff",
     },
     button: {
         backgroundColor: "#007AFF",
         padding: 15,
         borderRadius: 8,
         alignItems: "center",
+        ...Platform.select({
+            ios: {
+                shadowColor: "#000",
+                shadowOffset: {
+                    width: 0,
+                    height: 2,
+                },
+                shadowOpacity: 0.2,
+                shadowRadius: 3,
+            },
+            android: {
+                elevation: 4,
+            },
+        }),
     },
     buttonText: {
         color: "#fff",
