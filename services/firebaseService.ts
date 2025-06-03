@@ -213,6 +213,20 @@ export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
   }
 };
 
+export const updateTripParticipants = async (tripId: string, participants: string[]): Promise<void> => {
+  try {
+    console.log('Updating trip participants:', tripId, participants);
+    const tripRef = doc(db, 'trips', tripId);
+    await updateDoc(tripRef, {
+      participants: participants
+    });
+    console.log('Trip participants updated successfully');
+  } catch (error) {
+    console.error('Error updating trip participants:', error);
+    throw new Error('여행 멤버 업데이트에 실패했습니다.');
+  }
+};
+
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
   try {
     console.log('Fetching trips for user:', userId);
