@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
-import { Trip, User, Expense } from '../../types';
+import { Trip, User, Expense, ExpenseSplit } from '../../types';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -77,25 +77,49 @@ export default function TripDetailScreen() {
   const calculateExpenseAmount = (expense: Expense) => {
     if (!currentUserId) return { amount: 0, type: 'owe' as 'owe' | 'receive' };
     
-    const splitAmount = expense.amount / expense.splitBetween.length;
-    
-    if (expense.paidBy === currentUserId) {
-      // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
-      const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
-      return {
-        amount: othersAmount,
-        type: 'receive' as 'receive'
-      };
-    } else if (expense.splitBetween.includes(currentUserId)) {
-      // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
-      return {
-        amount: splitAmount,
-        type: 'owe' as 'owe'
-      };
+    // splitDetails가 있는 경우 더 정확한 계산 사용
+    if (expense.splitDetails && expense.splitDetails.length > 0) {
+      if (expense.paidBy === currentUserId) {
+        // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+        const othersAmount = expense.splitDetails
+          .filter(split => split.userId !== currentUserId)
+          .reduce((total, split) => total + split.amount, 0);
+        return {
+          amount: othersAmount,
+          type: 'receive' as 'receive'
+        };
+      } else {
+        // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+        const myShare = expense.splitDetails.find(split => split.userId === currentUserId);
+        if (myShare) {
+          return {
+            amount: myShare.amount,
+            type: 'owe' as 'owe'
+          };
+        }
+      }
     } else {
-      // 내가 관련없는 지출
-      return { amount: 0, type: 'owe' as 'owe' };
+      // 기존 방식 (균등 분할)
+      const splitAmount = expense.amount / expense.splitBetween.length;
+      
+      if (expense.paidBy === currentUserId) {
+        // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+        const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
+        return {
+          amount: othersAmount,
+          type: 'receive' as 'receive'
+        };
+      } else if (expense.splitBetween.includes(currentUserId)) {
+        // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+        return {
+          amount: splitAmount,
+          type: 'owe' as 'owe'
+        };
+      }
     }
+    
+    // 내가 관련없는 지출
+    return { amount: 0, type: 'owe' as 'owe' };
   };
 
   // 지출 내역을 날짜별로 그룹화
@@ -372,25 +396,47 @@ export default function TripDetailScreen() {
                 <View style={styles.splitInfo}>
                   <Text style={styles.splitTitle}>결제 : {selectedExpense.currency} {selectedExpense.amount} ({participants.find(p => p.id === selectedExpense.paidBy)?.name || '알 수 없음'})</Text>
                   <View style={styles.splitMembers}>
-                    {selectedExpense.splitBetween.map((userId: string, index: number) => {
-                      const participant = participants.find(p => p.id === userId);
-                      const splitAmount = selectedExpense.amount / selectedExpense.splitBetween.length;
-                      const percentage = Math.round((splitAmount / selectedExpense.amount) * 100);
-                      
-                      return (
-                        <View key={userId} style={styles.splitMember}>
-                          <View style={[styles.memberAvatar, { backgroundColor: ['#4ECDC4', '#96CEB4', '#FF6B6B', '#45B7D1'][index % 4] }]}>
-                            <Text style={styles.memberAvatarText}>{participant?.name?.charAt(0) || '?'}</Text>
+                    {selectedExpense.splitDetails && selectedExpense.splitDetails.length > 0 ? (
+                      // splitDetails가 있는 경우 정확한 정보 표시
+                      selectedExpense.splitDetails.map((split: ExpenseSplit, index: number) => {
+                        const participant = participants.find(p => p.id === split.userId);
+                        
+                        return (
+                          <View key={split.userId} style={styles.splitMember}>
+                            <View style={[styles.memberAvatar, { backgroundColor: ['#4ECDC4', '#96CEB4', '#FF6B6B', '#45B7D1'][index % 4] }]}>
+                              <Text style={styles.memberAvatarText}>{participant?.name?.charAt(0) || '?'}</Text>
+                            </View>
+                            <Text style={styles.memberName}>{participant?.name || '알 수 없음'}</Text>
+                            <TouchableOpacity style={styles.editMemberButton}>
+                              <Ionicons name="create-outline" size={12} color="#4A90E2" />
+                            </TouchableOpacity>
+                            <Text style={styles.memberAmount}>{Math.round(split.percentage)}%</Text>
+                            <Text style={styles.memberAmountValue}>{selectedExpense.currency} {split.amount.toFixed(0)}</Text>
                           </View>
-                          <Text style={styles.memberName}>{participant?.name || '알 수 없음'}</Text>
-                          <TouchableOpacity style={styles.editMemberButton}>
-                            <Ionicons name="create-outline" size={12} color="#4A90E2" />
-                          </TouchableOpacity>
-                          <Text style={styles.memberAmount}>{percentage}%</Text>
-                          <Text style={styles.memberAmountValue}>{selectedExpense.currency} {splitAmount.toFixed(0)}</Text>
-                        </View>
-                      );
-                    })}
+                        );
+                      })
+                    ) : (
+                      // 기존 방식 (균등 분할)
+                      selectedExpense.splitBetween.map((userId: string, index: number) => {
+                        const participant = participants.find(p => p.id === userId);
+                        const splitAmount = selectedExpense.amount / selectedExpense.splitBetween.length;
+                        const percentage = Math.round((splitAmount / selectedExpense.amount) * 100);
+                        
+                        return (
+                          <View key={userId} style={styles.splitMember}>
+                            <View style={[styles.memberAvatar, { backgroundColor: ['#4ECDC4', '#96CEB4', '#FF6B6B', '#45B7D1'][index % 4] }]}>
+                              <Text style={styles.memberAvatarText}>{participant?.name?.charAt(0) || '?'}</Text>
+                            </View>
+                            <Text style={styles.memberName}>{participant?.name || '알 수 없음'}</Text>
+                            <TouchableOpacity style={styles.editMemberButton}>
+                              <Ionicons name="create-outline" size={12} color="#4A90E2" />
+                            </TouchableOpacity>
+                            <Text style={styles.memberAmount}>{percentage}%</Text>
+                            <Text style={styles.memberAmountValue}>{selectedExpense.currency} {splitAmount.toFixed(0)}</Text>
+                          </View>
+                        );
+                      })
+                    )}
                   </View>
                 </View>
 

@@ -456,15 +456,27 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
   });
   
   expenses.forEach(expense => {
-    const splitAmount = expense.amount / expense.splitBetween.length;
-    
-    // Add to payer's balance (they paid for others)
-    balances[expense.paidBy] -= expense.amount;
-    
-    // Subtract from each person's balance (they owe money)
-    expense.splitBetween.forEach(userId => {
-      balances[userId] += splitAmount;
-    });
+    // splitDetails가 있는 경우 더 정확한 계산 사용
+    if (expense.splitDetails && expense.splitDetails.length > 0) {
+      // 결제자는 전체 금액을 지불했으므로 음수 (받아야 할 돈)
+      balances[expense.paidBy] -= expense.amount;
+      
+      // 각 사용자는 자신의 몫만큼 양수 (줘야 할 돈)
+      expense.splitDetails.forEach(split => {
+        balances[split.userId] += split.amount;
+      });
+    } else {
+      // 기존 방식 (균등 분할)
+      const splitAmount = expense.amount / expense.splitBetween.length;
+      
+      // Add to payer's balance (they paid for others)
+      balances[expense.paidBy] -= expense.amount;
+      
+      // Subtract from each person's balance (they owe money)
+      expense.splitBetween.forEach(userId => {
+        balances[userId] += splitAmount;
+      });
+    }
   });
   
   return Object.entries(balances).map(([userId, amount]) => ({

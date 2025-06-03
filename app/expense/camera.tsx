@@ -10,32 +10,47 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  CameraView,
-  useCameraPermissionsWrapper,
-  takePicture,
-  pickFromGallery,
-  isWebPlatform
-} from '../../services/cameraService';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { processImageWithClovaOCR, OCRResult } from '../../services/ocrService';
 
 export default function CameraScreen() {
   const { tripId, tripName } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const { permission, requestPermission } = useCameraPermissionsWrapper();
-  const [facing, setFacing] = useState<string>('back');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
   const cameraRef = useRef<any>(null);
 
   const handlePickFromGallery = async () => {
     try {
       setLoading(true);
-      const imageUri = await pickFromGallery();
-      await processImage(imageUri);
+      console.log('Starting gallery selection...');
+      
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+        return;
+      }
+
+      console.log('Gallery permission granted, launching image picker...');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      console.log('Image picker result:', result);
+
+      if (!result.canceled && result.assets[0]) {
+        console.log('Selected image URI:', result.assets[0].uri);
+        await processImage(result.assets[0].uri);
+      } else {
+        console.log('Image selection was canceled or no image selected');
+      }
     } catch (error: any) {
       console.error('Gallery error:', error);
-      if (error.message !== 'No image selected') {
-        Alert.alert('오류', '갤러리에서 이미지를 선택하는데 실패했습니다.');
-      }
+      Alert.alert('오류', '갤러리에서 이미지를 선택하는데 실패했습니다: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -45,18 +60,30 @@ export default function CameraScreen() {
     try {
       setLoading(true);
       
-      console.log('Processing image with Clova OCR:', imageUri);
+      console.log('=== Starting OCR Processing ===');
+      console.log('Image URI:', imageUri);
+      
+      // 이미지 URI 유효성 검사
+      if (!imageUri || typeof imageUri !== 'string') {
+        throw new Error('유효하지 않은 이미지 URI입니다.');
+      }
+      
+      // 먼저 간단한 테스트로 OCR 함수가 호출되는지 확인
+      console.log('Testing OCR function availability...');
       
       // 실제 Clova OCR 처리
+      console.log('Calling processImageWithClovaOCR...');
       const ocrResult: OCRResult = await processImageWithClovaOCR(imageUri);
       
-      console.log('OCR processing completed:', ocrResult);
+      console.log('=== OCR Processing Completed ===');
+      console.log('OCR Result:', JSON.stringify(ocrResult, null, 2));
       
       // OCR 결과 표시 및 확인
-      const resultMessage = `인식된 내용:\n` +
+      const resultMessage = `인식 결과:\n` +
         `금액: ${ocrResult.amount || '인식 실패'}\n` +
         `설명: ${ocrResult.description || '인식 실패'}\n` +
-        `신뢰도: ${ocrResult.confidence ? Math.round(ocrResult.confidence * 100) + '%' : '알 수 없음'}`;
+        `신뢰도: ${ocrResult.confidence ? Math.round(ocrResult.confidence * 100) + '%' : '알 수 없음'}\n\n` +
+        `원본 텍스트 (처음 100자):\n${(ocrResult.rawText || '없음').substring(0, 100)}...`;
       
       Alert.alert(
         'OCR 완료',
@@ -67,7 +94,7 @@ export default function CameraScreen() {
             style: 'cancel'
           },
           {
-            text: '원본 텍스트 보기',
+            text: '전체 텍스트 보기',
             onPress: () => {
               Alert.alert('인식된 전체 텍스트', ocrResult.rawText || '텍스트를 인식하지 못했습니다.');
             }
@@ -75,6 +102,10 @@ export default function CameraScreen() {
           {
             text: '사용하기',
             onPress: () => {
+              console.log('Navigating back to detail with OCR results...');
+              console.log('OCR Amount:', ocrResult.amount);
+              console.log('OCR Description:', ocrResult.description);
+              
               router.replace({
                 pathname: '/expense/detail',
                 params: { 
@@ -88,73 +119,57 @@ export default function CameraScreen() {
           }
         ]
       );
-    } catch (error) {
-      console.error('OCR processing error:', error);
-      Alert.alert('오류', '영수증 인식에 실패했습니다. 다시 시도해주세요.');
+    } catch (error: any) {
+      console.error('=== OCR Processing Error ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // 더 상세한 오류 정보 표시
+      const errorMessage = `OCR 처리 실패:\n${error.message}\n\n개발자 정보:\n${error.stack?.substring(0, 200) || '스택 정보 없음'}`;
+      
+      Alert.alert(
+        '오류', 
+        errorMessage,
+        [
+          { text: '확인', style: 'default' },
+          { text: '다시 시도', onPress: () => console.log('사용자가 다시 시도를 선택함') }
+        ]
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Web에서는 카메라 기능 비활성화
-  if (isWebPlatform) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.tripInfo}>
-            <View style={styles.tripIcon}>
-              <Ionicons name="airplane" size={20} color="white" />
-            </View>
-            <Text style={styles.tripName}>{tripName || '여행'}</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.cameraContainer}>
-          <Text style={styles.title}>웹에서는 카메라 기능을 지원하지 않습니다</Text>
-          
-          <View style={styles.webFallbackContainer}>
-            <Ionicons name="camera-outline" size={80} color="#ccc" />
-            <Text style={styles.webFallbackText}>
-              갤러리에서 영수증 이미지를 선택해주세요
-            </Text>
-            
-            <TouchableOpacity 
-              style={styles.galleryButton} 
-              onPress={handlePickFromGallery}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons name="images" size={24} color="white" />
-              )}
-              <Text style={styles.galleryButtonText}>
-                {loading ? '처리 중...' : '갤러리에서 선택'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
   const handleTakePhoto = async () => {
     try {
+      console.log('Starting photo capture...');
+      
+      if (!cameraRef.current) {
+        Alert.alert('오류', '카메라를 준비하는 중입니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
+
       setLoading(true);
       
-      const photo = await takePicture(cameraRef, {
+      console.log('Taking picture with camera...');
+      const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
+        base64: false,
       });
       
+      console.log('Photo captured:', photo);
+      
       if (photo?.uri) {
+        console.log('Photo URI:', photo.uri);
         await processImage(photo.uri);
+      } else {
+        console.log('No photo URI received');
+        Alert.alert('오류', '사진 촬영 결과를 받지 못했습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Camera error:', error);
-      Alert.alert('오류', '사진 촬영에 실패했습니다.');
+      Alert.alert('오류', '사진 촬영에 실패했습니다: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -162,6 +177,10 @@ export default function CameraScreen() {
 
   const handleClose = () => {
     router.back();
+  };
+
+  const toggleCameraFacing = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
   if (!permission) {
@@ -187,10 +206,6 @@ export default function CameraScreen() {
       </View>
     );
   }
-
-  const toggleCameraFacing = () => {
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
-  };
 
   return (
     <View style={styles.container}>
@@ -256,6 +271,61 @@ export default function CameraScreen() {
             <Text style={styles.controlButtonText}>전환</Text>
           </TouchableOpacity>
         </View>
+
+        {/* OCR 테스트 버튼 */}
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={async () => {
+            try {
+              // 테스트용 가짜 이미지 URI로 OCR 테스트
+              Alert.alert(
+                'OCR 테스트',
+                'OCR 기능을 테스트하시겠습니까? (가짜 데이터로 테스트)',
+                [
+                  { text: '취소', style: 'cancel' },
+                  { 
+                    text: '테스트', 
+                    onPress: async () => {
+                      console.log('OCR 테스트 시작...');
+                      const testResult: OCRResult = {
+                        amount: '12500',
+                        description: '테스트 카페',
+                        rawText: '테스트 카페\n아메리카노 5000원\n라떼 7500원\n합계 12500원',
+                        confidence: 0.95
+                      };
+                      
+                      Alert.alert(
+                        'OCR 테스트 결과',
+                        `금액: ${testResult.amount}\n설명: ${testResult.description}`,
+                        [
+                          { text: '확인' },
+                          {
+                            text: '적용하기',
+                            onPress: () => {
+                              router.replace({
+                                pathname: '/expense/detail',
+                                params: { 
+                                  tripId, 
+                                  tripName,
+                                  ocrAmount: testResult.amount,
+                                  ocrDescription: testResult.description
+                                }
+                              });
+                            }
+                          }
+                        ]
+                      );
+                    }
+                  }
+                ]
+              );
+            } catch (error) {
+              console.error('OCR 테스트 오류:', error);
+            }
+          }}
+        >
+          <Text style={styles.testButtonText}>OCR 테스트</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -413,10 +483,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 20,
+    textAlign: 'center',
   },
   permissionButton: {
-    padding: 16,
     backgroundColor: '#4A90E2',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   permissionButtonText: {
@@ -424,53 +496,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
-  // Web fallback styles
-  webFallbackContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderStyle: 'dashed',
-  },
-  webFallbackText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 30,
-    lineHeight: 24,
-  },
-  galleryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  galleryButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-    marginLeft: 8,
-  },
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   statusText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 20,
+    color: '#666',
+    marginTop: 12,
   },
   permissionDescription: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 30,
+    paddingHorizontal: 20,
+    lineHeight: 20,
+  },
+  testButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  testButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
   },
 }); 

@@ -19,9 +19,10 @@ import {
   addExpense, 
   getTripById, 
   getUsersByIds, 
-  getCurrentUser 
+  getCurrentUser,
+  getUserTrips
 } from '../../services/firebaseService';
-import { Trip, User, ExpenseCategory } from '../../types';
+import { Trip, User, ExpenseCategory, ExpenseSplit } from '../../types';
 
 const splitMethods = [
   { id: 'equal', name: '균일하게', description: '모든 사람이 동일한 금액' },
@@ -54,6 +55,8 @@ interface MemberAmount {
 export default function ExpenseDetailScreen() {
   const { tripId, tripName, ocrAmount, ocrDescription } = useLocalSearchParams();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const [userTrips, setUserTrips] = useState<Trip[]>([]);
+  const [tripSelectionModalVisible, setTripSelectionModalVisible] = useState(false);
   const [members, setMembers] = useState<User[]>([]);
   const [memberAmounts, setMemberAmounts] = useState<MemberAmount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,8 +72,8 @@ export default function ExpenseDetailScreen() {
   const [memo, setMemo] = useState('');
 
   useEffect(() => {
-    fetchTripData();
-  }, [tripId]);
+    initializeData();
+  }, []);
 
   useEffect(() => {
     // OCR 결과가 있으면 자동으로 입력
@@ -82,25 +85,57 @@ export default function ExpenseDetailScreen() {
     }
   }, [ocrAmount, ocrDescription]);
 
-  const fetchTripData = async () => {
-    if (!tripId || typeof tripId !== 'string') return;
-    
+  const initializeData = async () => {
     try {
       setLoading(true);
       
-      // Fetch trip data
-      const tripData = await getTripById(tripId);
-      if (!tripData) {
-        Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
-        router.back();
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        Alert.alert('오류', '로그인이 필요합니다.');
+        router.replace('/auth/login');
         return;
       }
+
+      // 사용자의 모든 여행 가져오기
+      const trips = await getUserTrips(currentUser.uid);
+      setUserTrips(trips);
+
+      // tripId가 있으면 해당 여행 선택, 없으면 가장 최근 여행 선택
+      let selectedTrip: Trip | null = null;
       
-      setTrip(tripData);
-      setCurrency(tripData.currency);
+      if (tripId && typeof tripId === 'string') {
+        selectedTrip = trips.find(t => t.id === tripId) || null;
+      }
+      
+      if (!selectedTrip && trips.length > 0) {
+        // 가장 최근에 생성된 여행 선택
+        selectedTrip = trips.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+      }
+
+      if (selectedTrip) {
+        await selectTrip(selectedTrip);
+      } else {
+        Alert.alert('알림', '등록된 여행이 없습니다. 먼저 여행을 생성해주세요.', [
+          { text: '확인', onPress: () => router.replace('/trip/create') }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error initializing data:', error);
+      Alert.alert('오류', '데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectTrip = async (selectedTrip: Trip) => {
+    try {
+      setTrip(selectedTrip);
+      setCurrency(selectedTrip.currency);
       
       // Fetch participants data
-      const participantUsers = await getUsersByIds(tripData.participants);
+      const participantUsers = await getUsersByIds(selectedTrip.participants);
       setMembers(participantUsers);
       
       // Initialize member amounts
@@ -118,11 +153,14 @@ export default function ExpenseDetailScreen() {
       }
       
     } catch (error) {
-      console.error('Error fetching trip data:', error);
+      console.error('Error selecting trip:', error);
       Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleTripSelection = (selectedTrip: Trip) => {
+    selectTrip(selectedTrip);
+    setTripSelectionModalVisible(false);
   };
 
   const handleCurrencySelect = (selectedCurrency: string) => {
@@ -229,9 +267,19 @@ export default function ExpenseDetailScreen() {
         return;
       }
 
+      // splitBetween: 분할에 참여하는 사용자 IDs
       const splitBetween = memberAmounts
         .filter(member => member.amount > 0)
         .map(member => member.userId);
+
+      // splitDetails: 각 멤버별 상세 분할 정보
+      const splitDetails = memberAmounts
+        .filter(member => member.amount > 0)
+        .map(member => ({
+          userId: member.userId,
+          amount: member.amount,
+          percentage: member.percentage
+        }));
 
       const expenseData = {
         tripId: trip.id,
@@ -241,10 +289,17 @@ export default function ExpenseDetailScreen() {
         currency,
         paidBy,
         splitBetween,
+        splitDetails, // 각 멤버별 상세 정보
+        splitMethod, // 분할 방법
         category: ExpenseCategory.OTHER,
         date: new Date(),
         createdAt: new Date(),
       };
+
+      console.log('Saving expense with detailed split information:', {
+        ...expenseData,
+        splitDetails: expenseData.splitDetails
+      });
 
       await addExpense(expenseData);
       
@@ -395,7 +450,10 @@ export default function ExpenseDetailScreen() {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.tripInfo}>
+          <TouchableOpacity 
+            style={styles.tripInfo} 
+            onPress={() => setTripSelectionModalVisible(true)}
+          >
             <View style={styles.tripIcon}>
               {trip?.emoji ? (
                 <Text style={styles.tripEmoji}>{trip.emoji}</Text>
@@ -403,8 +461,12 @@ export default function ExpenseDetailScreen() {
                 <Ionicons name="airplane" size={20} color="white" />
               )}
             </View>
-            <Text style={styles.tripName}>{trip?.name || tripName}</Text>
-          </View>
+            <View style={styles.tripDetails}>
+              <Text style={styles.tripName}>{trip?.name || '여행을 선택해주세요'}</Text>
+              <Text style={styles.tripSubtext}>탭하여 여행 변경</Text>
+            </View>
+            <Ionicons name="chevron-down" size={20} color="#666" />
+          </TouchableOpacity>
 
           {/* 1. 내용 작성 섹션 (최상단) */}
           <View style={styles.section}>
@@ -549,6 +611,72 @@ export default function ExpenseDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Trip Selection Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={tripSelectionModalVisible}
+        onRequestClose={() => setTripSelectionModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.tripModalContent}>
+            <View style={styles.tripModalHeader}>
+              <Text style={styles.tripModalTitle}>여행 선택</Text>
+              <TouchableOpacity onPress={() => setTripSelectionModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.tripList}>
+              {userTrips.map((tripItem) => (
+                <TouchableOpacity
+                  key={tripItem.id}
+                  style={[
+                    styles.tripItem,
+                    trip?.id === tripItem.id && styles.tripItemSelected
+                  ]}
+                  onPress={() => handleTripSelection(tripItem)}
+                >
+                  <View style={styles.tripItemIcon}>
+                    {tripItem.emoji ? (
+                      <Text style={styles.tripEmoji}>{tripItem.emoji}</Text>
+                    ) : (
+                      <Ionicons name="airplane" size={20} color="white" />
+                    )}
+                  </View>
+                  <View style={styles.tripItemInfo}>
+                    <Text style={styles.tripItemName}>{tripItem.name}</Text>
+                    <Text style={styles.tripItemDate}>
+                      {new Date(tripItem.startDate).toLocaleDateString()} - {new Date(tripItem.endDate).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.tripItemCurrency}>{tripItem.currency}</Text>
+                  </View>
+                  {trip?.id === tripItem.id && (
+                    <Ionicons name="checkmark" size={20} color="#4A90E2" />
+                  )}
+                </TouchableOpacity>
+              ))}
+              
+              {userTrips.length === 0 && (
+                <View style={styles.noTripsContainer}>
+                  <Ionicons name="airplane-outline" size={50} color="#ccc" />
+                  <Text style={styles.noTripsText}>등록된 여행이 없습니다</Text>
+                  <TouchableOpacity 
+                    style={styles.createTripButton}
+                    onPress={() => {
+                      setTripSelectionModalVisible(false);
+                      router.push('/trip/create');
+                    }}
+                  >
+                    <Text style={styles.createTripButtonText}>새 여행 만들기</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </TabLayout>
   );
 }
@@ -611,10 +739,17 @@ const styles = StyleSheet.create({
   tripEmoji: {
     fontSize: 20,
   },
+  tripDetails: {
+    flex: 1,
+  },
   tripName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  tripSubtext: {
+    fontSize: 14,
+    color: '#666',
   },
   section: {
     backgroundColor: 'white',
@@ -940,5 +1075,82 @@ const styles = StyleSheet.create({
   currencyName: {
     fontSize: 14,
     color: '#666',
+  },
+  tripModalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  tripModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  tripModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  tripList: {
+    maxHeight: 200,
+  },
+  tripItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  tripItemSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  tripItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4A90E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  tripItemInfo: {
+    flex: 1,
+  },
+  tripItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  tripItemDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  tripItemCurrency: {
+    fontSize: 14,
+    color: '#666',
+  },
+  noTripsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noTripsText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+  },
+  createTripButton: {
+    backgroundColor: '#4A90E2',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  createTripButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
