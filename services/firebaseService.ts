@@ -304,13 +304,28 @@ export const addExpense = async (expense: Omit<Expense, 'id'>): Promise<string> 
 
 export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
   try {
+    console.log('Getting expenses for tripId:', tripId);
     const expensesRef = collection(db, 'expenses');
-    const q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
-    const querySnapshot = await getDocs(q);
+    
+    // First try with orderBy
+    let q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
+    let querySnapshot;
+    
+    try {
+      querySnapshot = await getDocs(q);
+      console.log('Query with orderBy successful, snapshot size:', querySnapshot.size);
+    } catch (orderByError) {
+      console.log('Query with orderBy failed, trying without orderBy:', orderByError);
+      // If orderBy fails (due to missing index), try without orderBy
+      q = query(expensesRef, where('tripId', '==', tripId));
+      querySnapshot = await getDocs(q);
+      console.log('Query without orderBy, snapshot size:', querySnapshot.size);
+    }
     
     const expenses: Expense[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+      console.log('Found expense document:', doc.id, data);
       expenses.push({
         id: doc.id,
         ...data,
@@ -319,6 +334,10 @@ export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
       } as Expense);
     });
     
+    // Sort by date if we didn't use orderBy
+    expenses.sort((a, b) => b.date.getTime() - a.date.getTime());
+    
+    console.log('Total expenses found:', expenses.length);
     return expenses;
   } catch (error) {
     console.error('Error getting trip expenses:', error);
