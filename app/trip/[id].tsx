@@ -13,14 +13,8 @@ import {
   RefreshControl
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
-import { 
-  getTripById, 
-  getUsersByIds, 
-  getTripExpenses, 
-  deleteExpense,
-  calculateRealTripBalances 
-} from '../../services/firebaseService';
-import { Trip, User, Expense, Balance } from '../../types';
+import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
+import { Trip, User, Expense } from '../../types';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -31,7 +25,8 @@ export default function TripDetailScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTripData = async () => {
@@ -39,7 +34,38 @@ export default function TripDetailScreen() {
       
       try {
         setLoading(true);
-        await loadTripData(id);
+        
+        // Get current user
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+          Alert.alert('오류', '로그인이 필요합니다.');
+          router.back();
+          return;
+        }
+        setCurrentUserId(currentUser.uid);
+        console.log('Current user ID:', currentUser.uid);
+        
+        // Fetch trip data
+        const tripData = await getTripById(id);
+        if (!tripData) {
+          Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
+          router.back();
+          return;
+        }
+        
+        setTrip(tripData);
+        console.log('Trip data:', tripData);
+        
+        // Fetch participants data
+        const participantUsers = await getUsersByIds(tripData.participants);
+        setParticipants(participantUsers);
+        console.log('Participants:', participantUsers);
+        
+        // Fetch expenses data
+        const expensesData = await getTripExpenses(id);
+        console.log('Fetched expenses for tripId:', id);
+        console.log('Expenses data:', expensesData);
+        setExpenses(expensesData);
       } catch (error) {
         console.error('Error fetching trip data:', error);
         Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
@@ -51,42 +77,96 @@ export default function TripDetailScreen() {
     fetchTripData();
   }, [id]);
 
-  const loadTripData = async (tripId: string) => {
-    // Fetch trip data
-    const tripData = await getTripById(tripId);
-    if (!tripData) {
-      Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
-      router.back();
-      return;
+  // 개별 지출에 대한 받을돈/줄돈 계산
+  const calculateExpenseAmount = (expense: Expense) => {
+    if (!currentUserId) return { amount: 0, type: 'owe' as 'owe' | 'receive' };
+    
+    const splitAmount = expense.amount / expense.splitBetween.length;
+    
+    if (expense.paidBy === currentUserId) {
+      // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+      const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
+      return {
+        amount: othersAmount,
+        type: 'receive' as 'receive'
+      };
+    } else if (expense.splitBetween.includes(currentUserId)) {
+      // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+      return {
+        amount: splitAmount,
+        type: 'owe' as 'owe'
+      };
+    } else {
+      // 내가 관련없는 지출
+      return { amount: 0, type: 'owe' as 'owe' };
     }
-    
-    setTrip(tripData);
-    
-    // Fetch participants data
-    const participantUsers = await getUsersByIds(tripData.participants);
-    setParticipants(participantUsers);
-    
-    // Fetch expenses
-    const tripExpenses = await getTripExpenses(tripId);
-    setExpenses(tripExpenses);
-    
-    // Calculate balances
-    const tripBalances = await calculateRealTripBalances(tripId);
-    setBalances(tripBalances);
   };
 
-  const onRefresh = async () => {
-    if (!id || typeof id !== 'string') return;
+  // 지출 내역을 날짜별로 그룹화
+  const groupExpensesByDate = () => {
+    console.log('Grouping expenses:', expenses.length);
     
-    setRefreshing(true);
-    try {
-      await loadTripData(id);
-    } catch (error) {
-      console.error('Error refreshing trip data:', error);
-    } finally {
-      setRefreshing(false);
+    if (expenses.length === 0) {
+      console.log('No expenses to group');
+      return [];
     }
+    
+    const grouped: { [key: string]: Expense[] } = {};
+    
+    expenses.forEach(expense => {
+      console.log('Processing expense:', expense.title, expense.amount);
+      
+      const { amount } = calculateExpenseAmount(expense);
+      console.log('Calculated amount for expense:', expense.title, amount);
+      
+      // amount가 0인 지출도 일단 표시해보자 (디버깅용)
+      // if (amount === 0) return;
+      
+      const dateKey = expense.date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short'
+      });
+      
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(expense);
+    });
+    
+    const result = Object.entries(grouped).map(([date, items]) => ({
+      id: date,
+      date,
+      items
+    }));
+    
+    console.log('Grouped expenses result:', result);
+    return result;
   };
+
+  // 전체 정산 금액 계산
+  const calculateTotalBalances = () => {
+    let totalReceivable = 0;  // 받을 돈
+    let totalPayable = 0;     // 줄 돈
+
+    expenses.forEach(expense => {
+      const { amount, type } = calculateExpenseAmount(expense);
+      if (type === 'receive') {
+        totalReceivable += amount;
+      } else if (type === 'owe') {
+        totalPayable += amount;
+      }
+    });
+
+    return {
+      receivable: Math.round(totalReceivable),
+      payable: Math.round(totalPayable)
+    };
+  };
+
+  const balances = calculateTotalBalances();
+  const groupedExpenses = groupExpensesByDate();
 
   const handleExpensePress = (expense: Expense) => {
     setSelectedExpense(expense);
@@ -114,15 +194,14 @@ export default function TripDetailScreen() {
           style: 'destructive', 
           onPress: async () => {
             try {
-              await deleteExpense(selectedExpense.id);
+              // TODO: Firebase에서 실제 삭제 구현
+              // await deleteExpense(selectedExpense.id);
+              
+              // 임시로 로컬 상태에서 제거
+              setExpenses(prev => prev.filter(exp => exp.id !== selectedExpense.id));
               Alert.alert('삭제됨', '지출이 삭제되었습니다.');
-              // Refresh data
-              if (id && typeof id === 'string') {
-                await loadTripData(id);
-              }
               setSelectedExpense(null);
             } catch (error) {
-              console.error('Error deleting expense:', error);
               Alert.alert('오류', '지출 삭제에 실패했습니다.');
             }
           }
@@ -131,122 +210,39 @@ export default function TripDetailScreen() {
     );
   };
 
-  const handleAddExpense = () => {
-    router.push({
-      pathname: '/expense/detail',
-      params: { tripId: id, tripName: trip?.name }
-    });
-  };
-
-  const getUserById = (userId: string): User | undefined => {
-    return participants.find(user => user.id === userId);
-  };
-
-  const getExpenseIcon = (expense: Expense) => {
-    switch (expense.category) {
-      case 'food': return '🍔';
-      case 'transport': return '🚗';
-      case 'accommodation': return '🏨';
-      case 'entertainment': return '🎉';
-      case 'shopping': return '🛍️';
-      default: return '💰';
-    }
-  };
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      weekday: 'short'
-    });
-  };
-
-  const groupExpensesByDate = () => {
-    const grouped: { [key: string]: Expense[] } = {};
-    
-    expenses.forEach(expense => {
-      const dateKey = formatDate(expense.date);
-      if (!grouped[dateKey]) {
-        grouped[dateKey] = [];
-      }
-      grouped[dateKey].push(expense);
-    });
-    
-    return Object.entries(grouped).map(([date, items]) => ({
-      date,
-      items
-    }));
-  };
-
-  const getCurrentUserBalance = () => {
-    // For now, we'll show the first balance or calculate based on current user
-    // This should be updated to use the actual current user
-    if (balances.length > 0) {
-      const totalOwed = balances.reduce((sum, balance) => 
-        balance.amount > 0 ? sum + balance.amount : sum, 0
-      );
-      const totalToReceive = balances.reduce((sum, balance) => 
-        balance.amount < 0 ? sum + Math.abs(balance.amount) : sum, 0
-      );
-      
-      return {
-        receivable: totalToReceive,
-        payable: totalOwed
-      };
-    }
-    return { receivable: 0, payable: 0 };
-  };
-
-  const currentBalance = getCurrentUserBalance();
-
-  const renderTripMateBox = () => (
-    <View style={styles.tripMateBox}>
-      <View style={styles.tripMateHeader}>
-        <Text style={styles.tripMateTitle}>Trip mate</Text>
-      </View>
-      <View style={styles.tripMateMembers}>
-        {participants.map((member, index) => (
-          <View key={member.id} style={styles.tripMateItem}>
-            <View style={[styles.tripMateAvatar, { backgroundColor: getAvatarColor(member.name) }]}>
-              <Text style={styles.tripMateAvatarText}>{member.name.charAt(0)}</Text>
-            </View>
-            <Text style={styles.tripMateName}>{member.name}</Text>
-          </View>
-        ))}
-        
-        <TouchableOpacity style={styles.addMemberButton}>
-          <Ionicons name="add" size={20} color="#666" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const getAvatarColor = (name: string) => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFA726'];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
-
-  const renderExpenseItem = (item: Expense) => {
-    const payer = getUserById(item.paidBy);
+  const renderExpenseItem = (expense: Expense) => {
+    const { amount, type } = calculateExpenseAmount(expense);
+    const paidByUser = participants.find(p => p.id === expense.paidBy);
     
     return (
       <TouchableOpacity
-        key={item.id}
+        key={expense.id}
         style={styles.expenseItem}
-        onPress={() => handleExpensePress(item)}
+        onPress={() => handleExpensePress(expense)}
       >
         <View style={styles.expenseInfo}>
           <View style={styles.expenseIcon}>
-            <Text style={styles.expenseEmoji}>{getExpenseIcon(item)}</Text>
+            <Text style={styles.expenseEmoji}>🍔</Text>
           </View>
           <View style={styles.expenseDetails}>
-            <Text style={styles.expenseName}>{item.title}</Text>
-            <Text style={styles.expensePaidBy}>{payer?.name || '알 수 없음'}</Text>
+            <Text style={styles.expenseName}>{expense.title}</Text>
+            <Text style={styles.expensePaidBy}>{paidByUser?.name || '알 수 없음'}</Text>
           </View>
         </View>
-        <Text style={styles.expenseAmount}>{item.currency} {item.amount.toFixed(2)}</Text>
+        <View style={styles.expenseAmountContainer}>
+          <Text style={[
+            styles.expenseAmountLabel,
+            { color: type === 'receive' ? '#FF6B6B' : '#4A90E2' }
+          ]}>
+            {type === 'receive' ? '받을돈' : '줄돈'}
+          </Text>
+          <Text style={[
+            styles.expenseAmount,
+            { color: type === 'receive' ? '#FF6B6B' : '#4A90E2' }
+          ]}>
+            {expense.currency} {amount.toFixed(0)}
+          </Text>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -322,8 +318,8 @@ export default function TripDetailScreen() {
         {renderTripMateBox()}
         
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>받을 돈: {trip?.currency || 'USD'} {currentBalance.receivable.toFixed(2)}</Text>
-          <Text style={styles.summarySubtitle}>줄 돈: {trip?.currency || 'USD'} {currentBalance.payable.toFixed(2)}</Text>
+          <Text style={styles.summaryTitle}>받을 돈: KRW {balances.receivable}</Text>
+          <Text style={styles.summarySubtitle}>줄 돈: KRW {balances.payable}</Text>
           <TouchableOpacity 
             style={styles.settleButton}
             onPress={() => router.push(`/balance?tripId=${id}`)}
@@ -340,14 +336,20 @@ export default function TripDetailScreen() {
         </View>
 
         <View style={styles.expensesContainer}>
-          {groupedExpenses.length === 0 ? (
-            <View style={styles.emptyExpenses}>
-              <Ionicons name="receipt-outline" size={50} color="#ccc" />
-              <Text style={styles.emptyExpensesText}>아직 등록된 지출이 없습니다</Text>
-              <Text style={styles.emptyExpensesSubtext}>첫 번째 지출을 추가해보세요!</Text>
-            </View>
-          ) : (
+          {groupedExpenses.length > 0 ? (
             groupedExpenses.map(renderExpenseSection)
+          ) : (
+            <View style={styles.emptyExpensesContainer}>
+              <Text style={styles.emptyExpensesTitle}>아직 지출 내역이 없습니다</Text>
+              <Text style={styles.emptyExpensesSubtitle}>새로운 지출을 추가해보세요!</Text>
+              <TouchableOpacity 
+                style={styles.addExpenseButton}
+                onPress={() => router.push(`/expense/detail?tripId=${id}`)}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.addExpenseButtonText}>지출 추가</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -368,9 +370,12 @@ export default function TripDetailScreen() {
             
             {selectedExpense && (
               <View style={styles.modalBody}>
-                <Text style={styles.modalDate}>
-                  {formatDate(selectedExpense.date)}
-                </Text>
+                <Text style={styles.modalDate}>{selectedExpense.date.toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  weekday: 'short'
+                })}</Text>
                 <View style={styles.modalExpenseInfo}>
                   <View style={styles.modalExpenseIcon}>
                     <Text style={styles.modalExpenseEmoji}>
@@ -378,9 +383,7 @@ export default function TripDetailScreen() {
                     </Text>
                   </View>
                   <Text style={styles.modalExpenseName}>{selectedExpense.title}</Text>
-                  <Text style={styles.modalExpenseAmount}>
-                    {selectedExpense.currency} {selectedExpense.amount.toFixed(2)}
-                  </Text>
+                  <Text style={styles.modalExpenseAmount}>{selectedExpense.currency} {selectedExpense.amount}</Text>
                 </View>
 
                 <View style={styles.modalActions}>
@@ -392,6 +395,36 @@ export default function TripDetailScreen() {
                     <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
                     <Text style={styles.deleteButtonText}>삭제</Text>
                   </TouchableOpacity>
+                </View>
+
+                <View style={styles.splitInfo}>
+                  <Text style={styles.splitTitle}>결제 : {selectedExpense.currency} {selectedExpense.amount} ({participants.find(p => p.id === selectedExpense.paidBy)?.name || '알 수 없음'})</Text>
+                  <View style={styles.splitMembers}>
+                    {selectedExpense.splitBetween.map((userId: string, index: number) => {
+                      const participant = participants.find(p => p.id === userId);
+                      const splitAmount = selectedExpense.amount / selectedExpense.splitBetween.length;
+                      const percentage = Math.round((splitAmount / selectedExpense.amount) * 100);
+                      
+                      return (
+                        <View key={userId} style={styles.splitMember}>
+                          <View style={[styles.memberAvatar, { backgroundColor: ['#4ECDC4', '#96CEB4', '#FF6B6B', '#45B7D1'][index % 4] }]}>
+                            <Text style={styles.memberAvatarText}>{participant?.name?.charAt(0) || '?'}</Text>
+                          </View>
+                          <Text style={styles.memberName}>{participant?.name || '알 수 없음'}</Text>
+                          <TouchableOpacity style={styles.editMemberButton}>
+                            <Ionicons name="create-outline" size={12} color="#4A90E2" />
+                          </TouchableOpacity>
+                          <Text style={styles.memberAmount}>{percentage}%</Text>
+                          <Text style={styles.memberAmountValue}>{selectedExpense.currency} {splitAmount.toFixed(0)}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={styles.memoSection}>
+                  <Text style={styles.memoTitle}>메모</Text>
+                  <Text style={styles.memoText}>{selectedExpense.description || '메모가 없습니다.'}</Text>
                 </View>
               </View>
             )}
@@ -530,6 +563,14 @@ const styles = StyleSheet.create({
   expensePaidBy: {
     fontSize: 12,
     color: '#666',
+  },
+  expenseAmountContainer: {
+    alignItems: 'flex-end',
+  },
+  expenseAmountLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 2,
   },
   expenseAmount: {
     fontSize: 14,
@@ -694,29 +735,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#64B5F6',
+  },
+  tripMateTagText: {
+    fontSize: 14,
+    color: '#1565C0',
+    fontWeight: '600',
+  },
+  emptyExpensesContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
+  },
+  emptyExpensesTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  emptyExpensesSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  addExpenseButton: {
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   addExpenseButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
-    marginLeft: 8,
-  },
-  emptyExpenses: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyExpensesText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  emptyExpensesSubtext: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
   },
 }); 
