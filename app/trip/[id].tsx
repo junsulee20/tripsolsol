@@ -8,89 +8,113 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
-import { getTripById, getUsersByIds } from '../../services/firebaseService';
-import { Trip, User } from '../../types';
+import { 
+  getTripById, 
+  getUsersByIds, 
+  getTripExpenses,
+  deleteExpense 
+} from '../../services/firebaseService';
+import { Trip, User, Expense } from '../../types';
 
-const initialMockExpenses = [
-  {
-    id: '1',
-    date: '2025.06.19 (일)',
-    items: [
-      { id: '1', name: '인앤아웃', paidBy: 'Junsu', amount: 11, time: '11$' },
-      { id: '2', name: '우버', paidBy: '나', amount: 30, time: '30$' },
-      { id: '3', name: '맥주값', paidBy: '김윤정', amount: 26, time: '26$' },
-    ]
-  },
-  {
-    id: '2',
-    date: '2025.06.18 (토)',
-    items: [
-      { id: '4', name: '호텔', paidBy: '나', amount: 100, time: '100$' },
-      { id: '5', name: '카지노', paidBy: '나', amount: 100, time: '100$' },
-    ]
-  }
-];
+interface ExpenseGroup {
+  date: string;
+  items: Expense[];
+}
 
 export default function TripDetailScreen() {
-  const { id } = useLocalSearchParams();
-  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const { id, refresh } = useLocalSearchParams();
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participants, setParticipants] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mockExpenses, setMockExpenses] = useState(initialMockExpenses);
+  const [expenses, setExpenses] = useState<ExpenseGroup[]>([]);
+
+  const fetchTripData = async () => {
+    if (!id || typeof id !== 'string') return;
+    
+    try {
+      setLoading(true);
+      
+      // Fetch trip data
+      const tripData = await getTripById(id);
+      if (!tripData) {
+        Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
+        router.back();
+        return;
+      }
+      
+      setTrip(tripData);
+      
+      // Fetch participants data
+      const participantUsers = await getUsersByIds(tripData.participants);
+      setParticipants(participantUsers);
+
+      // Fetch expenses
+      const expenseList = await getTripExpenses(id);
+      
+      // Group expenses by date
+      const groupedExpenses = expenseList.reduce((groups: ExpenseGroup[], expense) => {
+        const date = new Date(expense.date).toLocaleDateString('ko-KR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short'
+        });
+
+        const existingGroup = groups.find(g => g.date === date);
+        if (existingGroup) {
+          existingGroup.items.push(expense);
+        } else {
+          groups.push({ date, items: [expense] });
+        }
+
+        return groups;
+      }, []);
+
+      // Sort groups by date (newest first) and sort items within each group
+      const sortedGroups = groupedExpenses
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .map(group => ({
+          ...group,
+          items: group.items.sort((a, b) => b.date.getTime() - a.date.getTime())
+        }));
+
+      setExpenses(sortedGroups);
+    } catch (error) {
+      console.error('Error fetching trip data:', error);
+      Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchTripData = async () => {
-      if (!id || typeof id !== 'string') return;
-      
-      try {
-        setLoading(true);
-        
-        // Fetch trip data
-        const tripData = await getTripById(id);
-        if (!tripData) {
-          Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
-          router.back();
-          return;
-        }
-        
-        setTrip(tripData);
-        
-        // Fetch participants data
-        const participantUsers = await getUsersByIds(tripData.participants);
-        setParticipants(participantUsers);
-      } catch (error) {
-        console.error('Error fetching trip data:', error);
-        Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTripData();
-  }, [id]);
+  }, [id, refresh]); // refresh 파라미터가 변경될 때도 데이터 다시 불러오기
 
   // 정산 금액 계산
   const calculateBalances = () => {
     let totalReceivable = 0;  // 받을 돈
     let totalPayable = 0;     // 줄 돈
-    const myName = '나';      // 임시로 '나'를 현재 사용자로 설정
+    const currentUserId = 'current_user_id'; // TODO: 실제 현재 사용자 ID로 대체
 
-    mockExpenses.forEach(dateGroup => {
-      dateGroup.items.forEach(expense => {
+    expenses.forEach(group => {
+      group.items.forEach(expense => {
         const amount = expense.amount;
-        if (expense.paidBy === myName || expense.paidBy === 'Junsu') {
+        if (expense.paidBy === currentUserId) {
           // 내가 지불한 금액
           totalReceivable += amount;
         } else {
           // 다른 사람이 지불한 금액 중 내가 부담해야 할 부분
-          // 현재는 단순히 인원수로 나누어 계산
-          const memberCount = 4; // 임시로 4명으로 설정
-          totalPayable += amount / memberCount;
+          if (expense.splitBetween.includes(currentUserId)) {
+            const myShare = amount / expense.splitBetween.length;
+            totalPayable += myShare;
+          }
         }
       });
     });
@@ -103,17 +127,27 @@ export default function TripDetailScreen() {
 
   const balances = calculateBalances();
 
-  const handleExpensePress = (expense: any) => {
+  const handleExpensePress = (expense: Expense) => {
     setSelectedExpense(expense);
     setModalVisible(true);
   };
 
   const handleEditExpense = () => {
+    if (!selectedExpense) return;
     setModalVisible(false);
-    router.push(`/expense/detail?tripId=${id}&expenseId=${selectedExpense.id}`);
+    router.push({
+      pathname: "/expense/detail",
+      params: { 
+        tripId: id,
+        expenseId: selectedExpense.id,
+        edit: "true"
+      }
+    });
   };
 
   const handleDeleteExpense = () => {
+    if (!selectedExpense) return;
+    
     setModalVisible(false);
     Alert.alert(
       '삭제',
@@ -123,73 +157,62 @@ export default function TripDetailScreen() {
         { 
           text: '삭제', 
           style: 'destructive', 
-          onPress: () => {
-            // 실제로 mockExpenses에서 해당 expense를 삭제
-            setMockExpenses(prevExpenses => {
-              return prevExpenses.map(dateGroup => ({
-                ...dateGroup,
-                items: dateGroup.items.filter(item => item.id !== selectedExpense.id)
-              })).filter(dateGroup => dateGroup.items.length > 0); // 빈 날짜 그룹 제거
-            });
-            
-            Alert.alert('삭제됨', '지출이 삭제되었습니다.');
-            setSelectedExpense(null);
+          onPress: async () => {
+            try {
+              await deleteExpense(selectedExpense.id);
+              fetchTripData(); // 데이터 다시 불러오기
+              Alert.alert('삭제됨', '지출이 삭제되었습니다.');
+              setSelectedExpense(null);
+            } catch (error) {
+              console.error('Error deleting expense:', error);
+              Alert.alert('오류', '지출 삭제에 실패했습니다.');
+            }
           }
         }
       ]
     );
   };
 
-  const renderExpenseItem = (item: any) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.expenseItem}
-      onPress={() => handleExpensePress(item)}
-    >
-      <View style={styles.expenseInfo}>
-        <View style={styles.expenseIcon}>
-          <Text style={styles.expenseEmoji}>🍔</Text>
+  const renderExpenseItem = (expense: Expense) => {
+    const payer = participants.find(p => p.id === expense.paidBy);
+    
+    return (
+      <TouchableOpacity
+        key={expense.id}
+        style={styles.expenseItem}
+        onPress={() => handleExpensePress(expense)}
+      >
+        <View style={styles.expenseInfo}>
+          <View style={styles.expenseIcon}>
+            <Text style={styles.expenseEmoji}>💰</Text>
+          </View>
+          <View style={styles.expenseDetails}>
+            <Text style={styles.expenseName}>{expense.title}</Text>
+            <Text style={styles.expensePaidBy}>
+              {payer ? payer.name : '알 수 없음'}
+            </Text>
+          </View>
         </View>
-        <View style={styles.expenseDetails}>
-          <Text style={styles.expenseName}>{item.name}</Text>
-          <Text style={styles.expensePaidBy}>{item.paidBy}</Text>
-        </View>
-      </View>
-      <Text style={styles.expenseAmount}>{item.time}</Text>
-    </TouchableOpacity>
-  );
+        <Text style={styles.expenseAmount}>
+          {expense.currency} {expense.amount.toLocaleString()}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
-  const renderExpenseSection = (section: any) => (
-    <View key={section.id} style={styles.expenseSection}>
+  const renderExpenseSection = (section: ExpenseGroup) => (
+    <View key={section.date} style={styles.expenseSection}>
       <Text style={styles.sectionDate}>{section.date}</Text>
       {section.items.map(renderExpenseItem)}
     </View>
   );
 
-  const renderTripMateBox = () => {
-    if (!trip || participants.length === 0) return null;
-
-    return (
-      <View style={styles.tripMateCard}>
-        <View style={styles.tripMateHeader}>
-          <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
-          <View style={styles.tripMateList}>
-            {participants.map((participant, index) => (
-              <TouchableOpacity key={participant.id} style={styles.tripMateTag}>
-                <Text style={styles.tripMateTagText}>{participant.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
   if (loading) {
     return (
       <TabLayout>
         <View style={styles.loadingContainer}>
-          <Text>로딩 중...</Text>
+          <ActivityIndicator size="large" color="#4A90E2" />
+          <Text style={styles.loadingText}>여행 정보를 불러오는 중...</Text>
         </View>
       </TabLayout>
     );
@@ -216,11 +239,9 @@ export default function TripDetailScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderTripMateBox()}
-        
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>받을 돈: ${balances.receivable}</Text>
-          <Text style={styles.summarySubtitle}>줄 돈: ${balances.payable}</Text>
+          <Text style={styles.summaryTitle}>받을 돈: {trip?.currency} {balances.receivable.toLocaleString()}</Text>
+          <Text style={styles.summarySubtitle}>줄 돈: {trip?.currency} {balances.payable.toLocaleString()}</Text>
           <TouchableOpacity 
             style={styles.settleButton}
             onPress={() => router.push(`/balance?tripId=${id}`)}
@@ -230,7 +251,15 @@ export default function TripDetailScreen() {
         </View>
 
         <View style={styles.expensesContainer}>
-          {mockExpenses.map(renderExpenseSection)}
+          {expenses.length > 0 ? (
+            expenses.map(renderExpenseSection)
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="receipt-outline" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>아직 지출 내역이 없습니다</Text>
+              <Text style={styles.emptySubtext}>새로운 지출을 추가해보세요!</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -250,13 +279,22 @@ export default function TripDetailScreen() {
             
             {selectedExpense && (
               <View style={styles.modalBody}>
-                <Text style={styles.modalDate}>2025.06.19 (일)</Text>
+                <Text style={styles.modalDate}>
+                  {new Date(selectedExpense.date).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    weekday: 'short'
+                  })}
+                </Text>
                 <View style={styles.modalExpenseInfo}>
                   <View style={styles.modalExpenseIcon}>
-                    <Text style={styles.modalExpenseEmoji}>🍔</Text>
+                    <Text style={styles.modalExpenseEmoji}>💰</Text>
                   </View>
-                  <Text style={styles.modalExpenseName}>인앤아웃</Text>
-                  <Text style={styles.modalExpenseAmount}>$11</Text>
+                  <Text style={styles.modalExpenseName}>{selectedExpense.title}</Text>
+                  <Text style={styles.modalExpenseAmount}>
+                    {selectedExpense.currency} {selectedExpense.amount.toLocaleString()}
+                  </Text>
                 </View>
 
                 <View style={styles.modalActions}>
@@ -268,30 +306,6 @@ export default function TripDetailScreen() {
                     <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
                     <Text style={styles.deleteButtonText}>삭제</Text>
                   </TouchableOpacity>
-                </View>
-
-                <View style={styles.splitInfo}>
-                  <Text style={styles.splitTitle}>결제 : 44$ (Junsu)</Text>
-                  <View style={styles.splitMembers}>
-                    {['Junsu', 'ВИКАЭМ', '김윤정', '지한'].map((member, index) => (
-                      <View key={member} style={styles.splitMember}>
-                        <View style={[styles.memberAvatar, { backgroundColor: ['#4ECDC4', '#96CEB4', '#FF6B6B', '#45B7D1'][index] }]}>
-                          <Text style={styles.memberAvatarText}>{member.charAt(0)}</Text>
-                        </View>
-                        <Text style={styles.memberName}>{member}</Text>
-                        <TouchableOpacity style={styles.editMemberButton}>
-                          <Ionicons name="create-outline" size={12} color="#4A90E2" />
-                        </TouchableOpacity>
-                        <Text style={styles.memberAmount}>25%</Text>
-                        <Text style={styles.memberAmountValue}>$11</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={styles.memoSection}>
-                  <Text style={styles.memoTitle}>메모</Text>
-                  <Text style={styles.memoText}>할리우드 인앤아웃 존맛</Text>
                 </View>
               </View>
             )}
@@ -523,114 +537,31 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     marginLeft: 4,
   },
-  splitInfo: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  splitTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1976D2',
-    marginBottom: 12,
-  },
-  splitMembers: {
-    gap: 8,
-  },
-  splitMember: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 12,
-    borderRadius: 8,
-  },
-  memberAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  memberAvatarText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  memberName: {
-    fontSize: 14,
-    color: '#333',
-    flex: 1,
-  },
-  editMemberButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  memberAmount: {
-    fontSize: 14,
-    color: '#666',
-    marginRight: 8,
-  },
-  memberAmountValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  memoSection: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 16,
-  },
-  memoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1976D2',
-    marginBottom: 8,
-  },
-  memoText: {
-    fontSize: 14,
-    color: '#1976D2',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tripMateCard: {
-    backgroundColor: '#E3F2FD',
-    margin: 16,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
-  },
-  tripMateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  tripMateTitle: {
+  loadingText: {
+    marginTop: 16,
     fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#1976D2',
-    marginRight: 12,
+    color: '#333',
+    marginTop: 16,
   },
-  tripMateList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tripMateTag: {
-    backgroundColor: '#90CAF9',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#64B5F6',
-  },
-  tripMateTagText: {
+  emptySubtext: {
     fontSize: 14,
-    color: '#1565C0',
-    fontWeight: '600',
-  },
+    color: '#666',
+    marginTop: 8,
+  }
 }); 

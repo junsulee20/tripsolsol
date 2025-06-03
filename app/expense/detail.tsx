@@ -13,10 +13,23 @@ import {
   FlatList,
   Image,
   ActivityIndicator,
+  ViewStyle,
+  TextStyle,
+  ImageStyle,
+  StyleProp,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
+import { CURRENCIES } from '../../constants/Currency';
+import { 
+  onAuthStateChange, 
+  getCurrentUser, 
+  getTripMembers,
+  addExpense 
+} from '../../services/firebaseService';
+import { getAvatarColor } from '../../utils/colors';
+import { ExpenseCategory } from '../../types';
 
 const members = [
   { id: '1', name: '김윤정', avatar: '김', amount: 0, percentage: 25 },
@@ -38,6 +51,108 @@ interface Member {
   amount?: number;
   percentage?: number;
 }
+
+type Styles = {
+  container: ViewStyle;
+  header: ViewStyle;
+  backButton: ViewStyle;
+  headerTitle: StyleProp<TextStyle>;
+  content: ViewStyle;
+  tripInfo: ViewStyle;
+  tripIcon: ViewStyle;
+  tripName: TextStyle;
+  section: ViewStyle;
+  sectionTitle: TextStyle;
+  inputContainer: ViewStyle;
+  label: TextStyle;
+  input: TextStyle;
+  memberItem: ViewStyle;
+  memberAvatar: ViewStyle;
+  memberAvatarText: TextStyle;
+  memberInfo: ViewStyle;
+  memberName: TextStyle;
+  memberAmount: TextStyle;
+  splitMethodsContainer: ViewStyle;
+  splitMethodButton: ViewStyle;
+  splitMethodButtonActive: ViewStyle;
+  splitMethodText: TextStyle;
+  splitMethodTextActive: TextStyle;
+  amountContainer: ViewStyle;
+  amountInputContainer: ViewStyle;
+  currencySelector: ViewStyle;
+  currencyText: TextStyle;
+  amountInput: TextStyle;
+  saveButton: ViewStyle;
+  saveButtonDisabled: ViewStyle;
+  saveButtonText: TextStyle;
+  row: ViewStyle;
+  flex1: ViewStyle;
+  currencyContainer: ViewStyle;
+  currencyButton: ViewStyle;
+  payerContainer: ViewStyle;
+  payerItem: ViewStyle;
+  selectedPayerItem: ViewStyle;
+  payerAvatar: ViewStyle;
+  payerAvatarText: TextStyle;
+  payerName: TextStyle;
+  splitContainer: ViewStyle;
+  splitMethodContainer: ViewStyle;
+  splitMethodItem: ViewStyle;
+  selectedSplitMethod: ViewStyle;
+  splitMethodDescription: TextStyle;
+  membersContainer: ViewStyle;
+  memberSplitItem: ViewStyle;
+  splitInputContainer: ViewStyle;
+  splitInput: TextStyle;
+  splitAmount: TextStyle;
+  totalContainer: ViewStyle;
+  totalText: TextStyle;
+  modalContainer: ViewStyle;
+  modalHeader: ViewStyle;
+  modalCancelText: TextStyle;
+  modalTitle: TextStyle;
+  placeholder: ViewStyle;
+  currencyItem: ViewStyle;
+  currencyCode: TextStyle;
+  currencyName: TextStyle;
+  selectedMemberItem: ViewStyle;
+  ocrStatusContainer: ViewStyle;
+  ocrHeader: ViewStyle;
+  ocrStatusText: TextStyle;
+  ocrResultRow: ViewStyle;
+  ocrLabel: TextStyle;
+  ocrValue: TextStyle;
+  ocrConfidence: TextStyle;
+  ocrWarning: TextStyle;
+  ocrIndicator: ViewStyle;
+  ocrFilledInput: ViewStyle;
+  receiptImageContainer: ViewStyle;
+  imageWrapper: ViewStyle;
+  receiptImage: ImageStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  payerScrollView: ViewStyle;
+  selectedIndicator: ViewStyle;
+  emptyMembersContainer: ViewStyle;
+  emptyMembersText: TextStyle;
+  inputWithLabel: ViewStyle;
+  inputUnit: TextStyle;
+  percentageTotal: TextStyle;
+  paidByContainer: ViewStyle;
+  paidBySelector: ViewStyle;
+  paidByName: TextStyle;
+  expandButton: ViewStyle;
+  modalOverlay: ViewStyle;
+  modalContent: ViewStyle;
+  customInputContainer: ViewStyle;
+  currencySymbol: StyleProp<TextStyle>;
+  customSplitInput: StyleProp<TextStyle>;
+  percentageIndicator: StyleProp<TextStyle>;
+  remainingAmount: StyleProp<TextStyle>;
+  remainingAmountWarning: StyleProp<TextStyle>;
+  percentageInputContainer: ViewStyle;
+  calculatedAmount: TextStyle;
+};
 
 export default function ExpenseDetailScreen() {
   const { tripId, tripName, scannedAmount, detectedCurrency, ocrConfidence, receiptImage } = useLocalSearchParams();
@@ -129,7 +244,7 @@ export default function ExpenseDetailScreen() {
         updatedMembers = members.map(member => ({
           ...member,
           amount: equalAmount,
-          percentage: (equalAmount / totalAmount) * 100
+          percentage: (100 / members.length)
         }));
         break;
 
@@ -155,20 +270,14 @@ export default function ExpenseDetailScreen() {
         // Keep existing custom amounts or set to 0 if not set
         updatedMembers = members.map(member => ({
           ...member,
-          amount: member.amount || 0
+          amount: member.amount || 0,
+          percentage: ((member.amount || 0) / totalAmount) * 100
         }));
         break;
     }
 
-    // Only update if there's actually a change to prevent infinite loops
-    const hasChanges = updatedMembers.some((member, index) => 
-      Math.abs((member.amount || 0) - (members[index].amount || 0)) > 0.01
-    );
-
-    if (hasChanges) {
-      setMembers(updatedMembers);
-    }
-  }, [amount, splitMethod.id]);
+    setMembers(updatedMembers);
+  }, [amount, splitMethod.id, members.length]);
 
   const handlePercentageChange = (memberId: string, percentage: number) => {
     if (splitMethod.id !== 'percentage') return;
@@ -217,29 +326,58 @@ export default function ExpenseDetailScreen() {
       return;
     }
 
+    if (!tripId) {
+      Alert.alert('오류', '여행 정보가 없습니다.');
+      return;
+    }
+
     try {
-      // 분할 대상자 ID 배열 생성
+      // Ensure we have a valid tripId
+      const targetTripId = Array.isArray(tripId) ? tripId[0] : tripId;
+      if (!targetTripId) {
+        throw new Error('유효하지 않은 여행 ID입니다.');
+      }
+
+      // 분할 대상자 ID 배열 생성 (amount가 0보다 큰 멤버만)
       const splitBetween = members
         .filter(member => (member.amount || 0) > 0)
         .map(member => member.id);
 
+      if (splitBetween.length === 0) {
+        Alert.alert('오류', '최소 한 명 이상의 분할 대상자가 필요합니다.');
+        return;
+      }
+
+      // 분할 정보는 별도로 저장
+      const splits = members.map(member => ({
+        userId: member.id,
+        amount: member.amount || 0,
+        percentage: member.percentage || 0
+      }));
+
       const expenseData = {
-        tripId: tripId as string,
+        tripId: targetTripId,
         title: title.trim(),
         amount: parseFloat(amount),
         currency: selectedCurrency.code,
         paidBy: selectedPayer,
         splitBetween,
-        category: 'other' as any, // TODO: 카테고리 선택 기능 추가
+        category: ExpenseCategory.OTHER,
         date: new Date(),
         createdAt: new Date(),
+        splits
       };
 
       await addExpense(expenseData);
       
-      Alert.alert('성공', '지출이 추가되었습니다.', [
-        { text: '확인', onPress: () => router.back() }
-      ]);
+      // 저장 성공 후 즉시 이동
+      router.replace({
+        pathname: "/trip/[id]",
+        params: { 
+          id: targetTripId,
+          refresh: Date.now().toString() // 새로고침을 위한 타임스탬프 추가
+        }
+      });
     } catch (error) {
       console.error('Error saving expense:', error);
       Alert.alert('오류', '지출 저장에 실패했습니다.');
@@ -259,33 +397,13 @@ export default function ExpenseDetailScreen() {
     </TouchableOpacity>
   );
 
-  const renderMemberItem = ({ item }: { item: Member }) => (
-    <TouchableOpacity
-      style={[
-        styles.memberItem,
-        selectedPayer === item.id && styles.selectedMemberItem
-      ]}
-      onPress={() => setSelectedPayer(item.id)}
-    >
-      <View style={styles.memberInfo}>
-        <View style={styles.memberAvatar}>
-          <Text style={styles.memberAvatarText}>{item.name[0]}</Text>
-        </View>
-        <Text style={styles.memberName}>{item.name}</Text>
-      </View>
-      {selectedPayer === item.id && (
-        <Ionicons name="checkmark-circle" size={24} color="#4A90E2" />
-      )}
-    </TouchableOpacity>
-  );
-
   const renderSplitDetails = () => {
     if (!amount || members.length === 0) return null;
 
+    const totalAmount = parseFloat(amount);
+
     return (
       <View style={styles.splitContainer}>
-        <Text style={styles.sectionTitle}>분할 내역</Text>
-        
         <View style={styles.splitMethodContainer}>
           {SPLIT_METHODS.map((method) => (
             <TouchableOpacity
@@ -298,9 +416,12 @@ export default function ExpenseDetailScreen() {
             >
               <Text style={[
                 styles.splitMethodText,
-                splitMethod.id === method.id && styles.selectedSplitMethodText
+                splitMethod.id === method.id && styles.splitMethodTextActive
               ]}>
                 {method.name}
+              </Text>
+              <Text style={styles.splitMethodDescription}>
+                {method.description}
               </Text>
             </TouchableOpacity>
           ))}
@@ -310,7 +431,7 @@ export default function ExpenseDetailScreen() {
           {members.map((member) => (
             <View key={member.id} style={styles.memberSplitItem}>
               <View style={styles.memberInfo}>
-                <View style={styles.memberAvatar}>
+                <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.id) }]}>
                   <Text style={styles.memberAvatarText}>{member.name[0]}</Text>
                 </View>
                 <Text style={styles.memberName}>{member.name}</Text>
@@ -318,31 +439,46 @@ export default function ExpenseDetailScreen() {
 
               <View style={styles.splitInputContainer}>
                 {splitMethod.id === 'percentage' && (
-                  <View style={styles.inputWithLabel}>
-                    <TextInput
-                      style={styles.splitInput}
-                      value={member.percentage ? member.percentage.toString() : ''}
-                      onChangeText={(text) => handlePercentageChange(member.id, parseFloat(text) || 0)}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                    <Text style={styles.inputUnit}>%</Text>
+                  <View style={styles.percentageInputContainer}>
+                    <View style={styles.inputWithLabel}>
+                      <TextInput
+                        style={styles.splitInput}
+                        value={member.percentage ? member.percentage.toString() : ''}
+                        onChangeText={(text) => handlePercentageChange(member.id, parseFloat(text) || 0)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
+                      <Text style={styles.inputUnit}>%</Text>
+                    </View>
+                    <Text style={styles.calculatedAmount}>
+                      {selectedCurrency.symbol}{((totalAmount * (member.percentage || 0)) / 100).toFixed(0)}
+                    </Text>
                   </View>
                 )}
                 
                 {splitMethod.id === 'custom' && (
-                  <TextInput
-                    style={styles.splitInput}
-                    value={member.amount ? member.amount.toString() : ''}
-                    onChangeText={(text) => handleCustomAmountChange(member.id, text)}
-                    keyboardType="numeric"
-                    placeholder="0"
-                  />
+                  <View style={styles.customInputContainer}>
+                    <Text style={styles.currencySymbol}>{selectedCurrency.symbol}</Text>
+                    <TextInput
+                      style={styles.customSplitInput}
+                      value={member.amount !== undefined ? member.amount.toString() : ''}
+                      onChangeText={(text) => handleCustomAmountChange(member.id, text)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                    {(member.amount || 0) > 0 && (
+                      <Text style={styles.percentageIndicator}>
+                        ({(((member.amount || 0) / totalAmount) * 100).toFixed(1)}%)
+                      </Text>
+                    )}
+                  </View>
                 )}
 
-                <Text style={styles.splitAmount}>
-                  {selectedCurrency.symbol}{(member.amount || 0).toFixed(0)}
-                </Text>
+                {splitMethod.id === 'equal' && (
+                  <Text style={styles.splitAmount}>
+                    {selectedCurrency.symbol}{(member.amount || 0).toFixed(0)}
+                  </Text>
+                )}
               </View>
             </View>
           ))}
@@ -355,6 +491,15 @@ export default function ExpenseDetailScreen() {
           {splitMethod.id === 'percentage' && (
             <Text style={styles.percentageTotal}>
               총 비율: {members.reduce((sum, m) => sum + (m.percentage || 0), 0).toFixed(1)}%
+            </Text>
+          )}
+          {splitMethod.id === 'custom' && (
+            <Text style={[
+              styles.remainingAmount,
+              totalAmount !== members.reduce((sum, m) => sum + (m.amount || 0), 0) && styles.remainingAmountWarning
+            ]}>
+              남은 금액: {selectedCurrency.symbol}
+              {(totalAmount - members.reduce((sum, m) => sum + (m.amount || 0), 0)).toFixed(0)}
             </Text>
           )}
         </View>
@@ -430,46 +575,7 @@ export default function ExpenseDetailScreen() {
             <View style={styles.tripIcon}>
               <Ionicons name="airplane" size={20} color="white" />
             </View>
-            <Text style={styles.tripName}>21학번 동기 유럽 여행</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>정산 방식을 선택해주세요</Text>
-            <View style={styles.paidByContainer}>
-              <Text style={styles.label}>누가 결제했나요?</Text>
-              <View style={styles.paidBySelector}>
-                <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(paidBy) }]}>
-                  <Text style={styles.memberAvatarText}>김</Text>
-                </View>
-                <Text style={styles.paidByName}>{paidBy}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.label}>어떻게 정산하고 싶으신가요?</Text>
-            <View style={styles.splitMethodsContainer}>
-              {splitMethods.map(renderSplitMethodItem)}
-            </View>
-
-            {splitMethod === 'custom' && (
-              <View style={styles.membersContainer}>
-                <TouchableOpacity style={styles.expandButton}>
-                  <Ionicons name="chevron-down" size={20} color="#4A90E2" />
-                </TouchableOpacity>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
-
-            {splitMethod === 'unequal' && (
-              <View style={styles.membersContainer}>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
-
-            {splitMethod === 'equal' && (
-              <View style={styles.membersContainer}>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
+            <Text style={styles.tripName}>{tripName || '여행'}</Text>
           </View>
 
           <View style={styles.section}>
@@ -478,8 +584,8 @@ export default function ExpenseDetailScreen() {
               <Text style={styles.label}>제목</Text>
               <TextInput
                 style={styles.input}
-                value={description}
-                onChangeText={setDescription}
+                value={title}
+                onChangeText={setTitle}
                 placeholder="어떤 항목인지 입력해주세요"
               />
             </View>
@@ -487,18 +593,60 @@ export default function ExpenseDetailScreen() {
             <View style={styles.amountContainer}>
               <Text style={styles.label}>화폐 / 금액</Text>
               <View style={styles.amountInputContainer}>
-                <View style={styles.currencySelector}>
-                  <Text style={styles.currencyText}>{currency}</Text>
-                </View>
+                <TouchableOpacity 
+                  style={styles.currencySelector}
+                  onPress={() => setShowCurrencyModal(true)}
+                >
+                  <Text style={styles.currencyText}>{selectedCurrency.code}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
                 <TextInput
                   style={styles.amountInput}
-                  value={totalAmount}
-                  onChangeText={setTotalAmount}
+                  value={amount}
+                  onChangeText={setAmount}
                   placeholder="3.00"
                   keyboardType="numeric"
                 />
               </View>
             </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>정산 방식</Text>
+            <View style={styles.paidByContainer}>
+              <Text style={styles.label}>누가 결제했나요?</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.payerScrollView}
+              >
+                {members.map((member) => (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={[
+                      styles.payerItem,
+                      selectedPayer === member.id && styles.selectedPayerItem
+                    ]}
+                    onPress={() => setSelectedPayer(member.id)}
+                  >
+                    <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.id) }]}>
+                      <Text style={styles.memberAvatarText}>{member.name[0]}</Text>
+                    </View>
+                    <Text style={styles.payerName}>{member.name}</Text>
+                    {selectedPayer === member.id && (
+                      <Ionicons 
+                        name="checkmark-circle" 
+                        size={16} 
+                        color="#4A90E2" 
+                        style={styles.selectedIndicator}
+                      />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {renderSplitDetails()}
           </View>
 
           <TouchableOpacity
@@ -511,12 +659,35 @@ export default function ExpenseDetailScreen() {
             </Text>
           </TouchableOpacity>
         </ScrollView>
+
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showCurrencyModal}
+          onRequestClose={() => setShowCurrencyModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>화폐 선택</Text>
+                <TouchableOpacity onPress={() => setShowCurrencyModal(false)}>
+                  <Text style={styles.modalCancelText}>취소</Text>
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={CURRENCIES}
+                renderItem={renderCurrencyItem}
+                keyExtractor={item => item.code}
+              />
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </TabLayout>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -551,31 +722,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#4A90E2',
-    borderRadius: 8,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   content: {
     flex: 1,
-  },
-  form: {
     padding: 20,
   },
-  inputContainer: {
+  tripInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  tripIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  tripName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  section: {
+    backgroundColor: 'white',
+    padding: 20,
     marginBottom: 12,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
@@ -583,6 +762,107 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  memberAvatarText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  memberName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  memberAmount: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  splitMethodsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  splitMethodButton: {
+    padding: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  splitMethodButtonActive: {
+    backgroundColor: '#E3F2FD',
+  },
+  splitMethodText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  splitMethodTextActive: {
+    color: '#4A90E2',
+    fontWeight: '600',
+  },
+  amountContainer: {
+    marginBottom: 16,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  currencyText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  amountInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  saveButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#E5E5E5',
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  inputContainer: {
+    marginBottom: 12,
   },
   row: {
     flexDirection: 'row',
@@ -605,17 +885,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E5E5',
   },
-  currencyText: {
-    fontSize: 16,
-    marginRight: 8,
-  },
   payerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   payerItem: {
-    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#F8F9FA',
+    padding: 12,
     borderRadius: 8,
     marginRight: 8,
   },
@@ -652,26 +930,31 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   splitMethodContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   splitMethodItem: {
-    padding: 12,
     backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    marginRight: 8,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
   },
   selectedSplitMethod: {
     backgroundColor: '#E3F2FD',
+    borderColor: '#4A90E2',
+    borderWidth: 1,
   },
   splitMethodText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  selectedSplitMethodText: {
     fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  splitMethodTextActive: {
+    color: '#4A90E2',
+  },
+  splitMethodDescription: {
+    fontSize: 14,
+    color: '#666',
   },
   membersContainer: {
     marginBottom: 12,
@@ -683,28 +966,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
-  },
-  memberInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  memberAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  memberAvatarText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  memberName: {
-    fontSize: 16,
-    color: '#333',
   },
   splitInputContainer: {
     flexDirection: 'row',
@@ -744,11 +1005,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   modalCancelText: {
     fontSize: 16,
-    fontWeight: '500',
     color: '#4A90E2',
   },
   modalTitle: {
@@ -775,15 +1035,6 @@ const styles = StyleSheet.create({
   currencyName: {
     fontSize: 16,
     color: '#666',
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    marginBottom: 8,
   },
   selectedMemberItem: {
     backgroundColor: '#E3F2FD',
@@ -833,9 +1084,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   ocrIndicator: {
-    fontSize: 12,
-    color: '#4A90E2',
-    fontWeight: 'normal',
+    marginLeft: 8,
   },
   ocrFilledInput: {
     borderColor: '#4A90E2',
@@ -898,5 +1147,89 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#666',
     marginTop: 8,
+  },
+  paidByContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  paidBySelector: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  paidByName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  expandButton: {
+    padding: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 8,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  customInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flex: 1,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    color: '#666',
+    marginRight: 4,
+  },
+  customSplitInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    padding: 0,
+    minWidth: 60,
+  },
+  percentageIndicator: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  remainingAmount: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
+  remainingAmountWarning: {
+    color: '#FF6B6B',
+    fontWeight: '500',
+  },
+  percentageInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+  },
+  calculatedAmount: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+    marginLeft: 12,
   },
 }); 

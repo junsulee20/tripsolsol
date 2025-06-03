@@ -311,19 +311,105 @@ export const getTripById = async (tripId: string): Promise<Trip | null> => {
 
 // Expense Services
 export const addExpense = async (expense: Omit<Expense, 'id'>): Promise<string> => {
-  return `expense-${Date.now()}`;
+  try {
+    console.log('Adding expense:', expense);
+    
+    // Convert Date objects to Timestamps and include splits in the main document
+    const firestoreExpenseData = {
+      ...expense,
+      date: Timestamp.fromDate(expense.date),
+      createdAt: Timestamp.fromDate(expense.createdAt)
+    };
+    
+    // Add the expense document
+    const expenseRef = await addDoc(collection(db, 'expenses'), firestoreExpenseData);
+    console.log('Expense added with ID:', expenseRef.id);
+
+    return expenseRef.id;
+  } catch (error) {
+    console.error('Error adding expense:', error);
+    throw new Error('지출 추가에 실패했습니다.');
+  }
 };
 
 export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
-  return [];
+  try {
+    console.log('Fetching expenses for trip:', tripId);
+    
+    const expensesRef = collection(db, 'expenses');
+    const q = query(
+      expensesRef,
+      where('tripId', '==', tripId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const expenses: Expense[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      try {
+        // Safely convert Timestamps to Dates with error handling
+        const expense: Expense = {
+          id: doc.id,
+          tripId: data.tripId,
+          title: data.title,
+          description: data.description,
+          amount: data.amount,
+          currency: data.currency,
+          paidBy: data.paidBy,
+          splitBetween: data.splitBetween,
+          category: data.category,
+          date: data.date?.toDate() || new Date(),
+          createdAt: data.createdAt?.toDate() || new Date(),
+          receipt: data.receipt
+        };
+        expenses.push(expense);
+      } catch (conversionError) {
+        console.error('Error converting expense data:', conversionError, data);
+        // Skip this expense if conversion fails
+      }
+    });
+    
+    // Sort expenses by date on the client side
+    expenses.sort((a, b) => b.date.getTime() - a.date.getTime());
+    
+    console.log(`Found ${expenses.length} expenses for trip:`, tripId);
+    return expenses;
+  } catch (error) {
+    console.error('Error getting trip expenses:', error);
+    return [];
+  }
 };
 
 export const updateExpense = async (expenseId: string, updates: Partial<Expense>): Promise<void> => {
-  // Mock update
+  try {
+    const expenseRef = doc(db, 'expenses', expenseId);
+    
+    // Convert Date objects to Timestamps if they exist in updates
+    const updateData = { ...updates };
+    if (updates.date) {
+      updateData.date = Timestamp.fromDate(updates.date);
+    }
+    if (updates.createdAt) {
+      updateData.createdAt = Timestamp.fromDate(updates.createdAt);
+    }
+    
+    await updateDoc(expenseRef, updateData);
+    console.log('Expense updated:', expenseId);
+  } catch (error) {
+    console.error('Error updating expense:', error);
+    throw new Error('지출 수정에 실패했습니다.');
+  }
 };
 
 export const deleteExpense = async (expenseId: string): Promise<void> => {
-  // Mock delete
+  try {
+    await deleteDoc(doc(db, 'expenses', expenseId));
+    console.log('Expense deleted:', expenseId);
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    throw new Error('지출 삭제에 실패했습니다.');
+  }
 };
 
 // Settlement Services

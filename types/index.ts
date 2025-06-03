@@ -6,6 +6,14 @@ export interface User {
   createdAt: Date;
 }
 
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  isSelected: boolean;
+  share: number;
+}
+
 export interface Trip {
   id: string;
   name: string;

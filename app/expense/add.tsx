@@ -10,6 +10,9 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
+import { onAuthStateChange, getUserTrips } from '../../services/firebaseService';
+import { Trip, Member } from '../../types';
+import { CURRENCIES } from '../../constants/Currency';
 
 const mockGroups = [
   { id: '1', name: '21학번 동기 유럽 여행', icon: 'airplane', color: '#4A90E2' },
