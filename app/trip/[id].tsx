@@ -8,9 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  ActivityIndicator,
-  RefreshControl
+  View
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
@@ -18,12 +16,10 @@ import { Trip, User, Expense } from '../../types';
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
-  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participants, setParticipants] = useState<User[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [balances, setBalances] = useState<Balance[]>([]);
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -175,15 +171,11 @@ export default function TripDetailScreen() {
 
   const handleEditExpense = () => {
     setModalVisible(false);
-    if (selectedExpense) {
-      router.push(`/expense/detail?tripId=${id}&expenseId=${selectedExpense.id}`);
-    }
+    router.push(`/expense/detail?tripId=${id}&expenseId=${selectedExpense.id}`);
   };
 
   const handleDeleteExpense = () => {
     setModalVisible(false);
-    if (!selectedExpense) return;
-    
     Alert.alert(
       '삭제',
       '이 지출을 삭제하시겠습니까?',
@@ -247,42 +239,41 @@ export default function TripDetailScreen() {
     );
   };
 
-  const renderExpenseSection = (section: { date: string; items: Expense[] }) => (
-    <View key={section.date} style={styles.expenseSection}>
+  const renderExpenseSection = (section: any) => (
+    <View key={section.id} style={styles.expenseSection}>
       <Text style={styles.sectionDate}>{section.date}</Text>
       {section.items.map(renderExpenseItem)}
     </View>
   );
 
+  const renderTripMateBox = () => {
+    if (!trip || participants.length === 0) return null;
+
+    return (
+      <View style={styles.tripMateCard}>
+        <View style={styles.tripMateHeader}>
+          <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
+          <View style={styles.tripMateList}>
+            {participants.map((participant, index) => (
+              <TouchableOpacity key={participant.id} style={styles.tripMateTag}>
+                <Text style={styles.tripMateTagText}>{participant.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <TabLayout>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <View style={styles.flagIcon}>
-              <Text style={styles.flagText}>🌍</Text>
-            </View>
-            <View>
-              <Text style={styles.tripTitle}>여행</Text>
-              <Text style={styles.tripSubtitle}>정산을 시작하세요!</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.timerButton}>
-            <Ionicons name="time" size={20} color="#4A90E2" />
-          </TouchableOpacity>
-        </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>여행 정보 불러오는 중...</Text>
+          <Text>로딩 중...</Text>
         </View>
       </TabLayout>
     );
   }
-
-  const groupedExpenses = groupExpensesByDate();
 
   return (
     <TabLayout>
@@ -304,17 +295,7 @@ export default function TripDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#4A90E2']}
-          />
-        }
-      >
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {renderTripMateBox()}
         
         <View style={styles.summaryCard}>
@@ -325,13 +306,6 @@ export default function TripDetailScreen() {
             onPress={() => router.push(`/balance?tripId=${id}`)}
           >
             <Text style={styles.settleButtonText}>정산하기</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.addExpenseContainer}>
-          <TouchableOpacity style={styles.addExpenseButton} onPress={handleAddExpense}>
-            <Ionicons name="add" size={24} color="white" />
-            <Text style={styles.addExpenseButtonText}>지출 추가</Text>
           </TouchableOpacity>
         </View>
 
@@ -378,9 +352,7 @@ export default function TripDetailScreen() {
                 })}</Text>
                 <View style={styles.modalExpenseInfo}>
                   <View style={styles.modalExpenseIcon}>
-                    <Text style={styles.modalExpenseEmoji}>
-                      {getExpenseIcon(selectedExpense)}
-                    </Text>
+                    <Text style={styles.modalExpenseEmoji}>🍔</Text>
                   </View>
                   <Text style={styles.modalExpenseName}>{selectedExpense.title}</Text>
                   <Text style={styles.modalExpenseAmount}>{selectedExpense.currency} {selectedExpense.amount}</Text>
@@ -664,16 +636,81 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     marginLeft: 4,
   },
+  splitInfo: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  splitTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 12,
+  },
+  splitMembers: {
+    gap: 8,
+  },
+  splitMember: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
+  },
+  memberAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  memberAvatarText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  memberName: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  editMemberButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  memberAmount: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+  },
+  memberAmountValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  memoSection: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    padding: 16,
+  },
+  memoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 8,
+  },
+  memoText: {
+    fontSize: 14,
+    color: '#1976D2',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    color: '#666',
-  },
-  tripMateBox: {
+  tripMateCard: {
     backgroundColor: '#E3F2FD',
     margin: 16,
     marginBottom: 8,
@@ -691,49 +728,15 @@ const styles = StyleSheet.create({
     color: '#1976D2',
     marginRight: 12,
   },
-  tripMateMembers: {
+  tripMateList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  tripMateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 12,
-    borderRadius: 8,
-  },
-  tripMateAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  tripMateAvatarText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  tripMateName: {
-    fontSize: 14,
-    color: '#333',
-    flex: 1,
-  },
-  addMemberButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  addExpenseContainer: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  addExpenseButton: {
-    flexDirection: 'row',
-    backgroundColor: '#4A90E2',
+  tripMateTag: {
+    backgroundColor: '#90CAF9',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#64B5F6',
