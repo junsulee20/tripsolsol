@@ -21,6 +21,7 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [bankAccount, setBankAccount] = useState('');
   const [loading, setLoading] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   
@@ -74,7 +75,7 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      const user = await signUp(email, password, name);
+      const user = await signUp(email, password, name, bankAccount);
       console.log('회원가입 성공:', user); // 디버깅용 로그
       
       showCustomModal('회원가입 완료', '환영합니다! 회원가입이 완료되었습니다.', [
@@ -178,6 +179,17 @@ export default function SignUpScreen() {
               onChangeText={setName}
               placeholder="닉네임을 입력하세요"
               autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>계좌번호</Text>
+            <TextInput
+              style={styles.input}
+              value={bankAccount}
+              onChangeText={setBankAccount}
+              placeholder="계좌번호를 입력하세요 (예: 110-123-456789)"
+              keyboardType="numeric"
             />
           </View>
 
