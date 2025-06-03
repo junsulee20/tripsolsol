@@ -214,6 +214,32 @@ export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
   }
 };
 
+export const updateTripParticipants = async (tripId: string, participants: string[]): Promise<void> => {
+  try {
+    const tripRef = doc(db, 'trips', tripId);
+    await updateDoc(tripRef, {
+      participants,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating trip participants:', error);
+    throw error;
+  }
+};
+
+export const updateTripData = async (tripId: string, updates: Partial<Trip>): Promise<void> => {
+  try {
+    const tripRef = doc(db, 'trips', tripId);
+    await updateDoc(tripRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating trip data:', error);
+    throw error;
+  }
+};
+
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
   try {
     console.log('Fetching trips for user:', userId);

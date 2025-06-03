@@ -7,8 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
@@ -23,7 +25,7 @@ export default function TripDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
+  
   useEffect(() => {
     const fetchTripData = async () => {
       if (!id || typeof id !== 'string') return;
@@ -279,9 +281,12 @@ export default function TripDetailScreen() {
           <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
           <View style={styles.tripMateList}>
             {participants.map((participant, index) => (
-              <TouchableOpacity key={participant.id} style={styles.tripMateTag}>
+              <View key={participant.id} style={styles.tripMateTag}>
                 <Text style={styles.tripMateTagText}>{participant.name}</Text>
-              </TouchableOpacity>
+                {participant.id === trip.createdBy && (
+                  <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
+                )}
+              </View>
             ))}
           </View>
         </View>
@@ -314,8 +319,11 @@ export default function TripDetailScreen() {
             <Text style={styles.tripSubtitle}>정산을 시작하세요!</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.timerButton}>
-          <Ionicons name="time" size={20} color="#4A90E2" />
+        <TouchableOpacity 
+          style={styles.timerButton}
+          onPress={() => router.push(`/trip/edit?id=${id}`)}
+        >
+          <Ionicons name="create-outline" size={20} color="#4A90E2" />
         </TouchableOpacity>
       </View>
 
@@ -780,17 +788,24 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tripMateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#90CAF9',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#64B5F6',
+    marginRight: 8,
+    marginBottom: 8,
   },
   tripMateTagText: {
     fontSize: 14,
     color: '#1565C0',
     fontWeight: '600',
+  },
+  creatorIcon: {
+    marginLeft: 4,
   },
   emptyExpensesContainer: {
     flex: 1,
@@ -823,3 +838,5 @@ const styles = StyleSheet.create({
     color: 'white',
   },
 }); 
+ 
+
