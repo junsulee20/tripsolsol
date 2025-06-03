@@ -26,7 +26,7 @@ import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
 
 // Auth Services
-export const signUp = async (email: string, password: string, name: string): Promise<User> => {
+export const signUp = async (email: string, password: string, name: string, bankAccount?: string): Promise<User> => {
   try {
     console.log('Starting signup process...');
     
@@ -37,6 +37,7 @@ export const signUp = async (email: string, password: string, name: string): Pro
       id: userCredential.user.uid,
       email,
       name,
+      bankAccount,
       createdAt: new Date()
     };
     
