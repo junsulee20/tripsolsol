@@ -13,7 +13,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
-import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser, searchUserByName, updateTripParticipants } from '../../services/firebaseService';
+import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
 import { Trip, User, Expense } from '../../types';
 
 export default function TripDetailScreen() {
@@ -26,13 +26,6 @@ export default function TripDetailScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  // 멤버 관리 관련 상태
-  const [memberModalVisible, setMemberModalVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isUpdatingMembers, setIsUpdatingMembers] = useState(false);
-
   useEffect(() => {
     const fetchTripData = async () => {
       if (!id || typeof id !== 'string') return;
@@ -264,158 +257,17 @@ export default function TripDetailScreen() {
           <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
           <View style={styles.tripMateList}>
             {participants.map((participant, index) => (
-              <TouchableOpacity 
-                key={participant.id} 
-                style={styles.tripMateTag}
-                onLongPress={() => handleRemoveMember(participant)}
-                disabled={isUpdatingMembers}
-              >
+              <View key={participant.id} style={styles.tripMateTag}>
                 <Text style={styles.tripMateTagText}>{participant.name}</Text>
                 {participant.id === trip.createdBy && (
                   <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
                 )}
-              </TouchableOpacity>
+              </View>
             ))}
-            <TouchableOpacity 
-              style={styles.addMemberButton} 
-              onPress={() => setMemberModalVisible(true)}
-              disabled={isUpdatingMembers}
-            >
-              <Ionicons name="add" size={16} color="#4A90E2" />
-              <Text style={styles.addMemberText}>멤버 추가</Text>
-            </TouchableOpacity>
           </View>
         </View>
-        {isUpdatingMembers && (
-          <View style={styles.updatingIndicator}>
-            <ActivityIndicator size="small" color="#4A90E2" />
-            <Text style={styles.updatingText}>업데이트 중...</Text>
-          </View>
-        )}
       </View>
     );
-  };
-
-  // 멤버 검색 함수
-  const handleSearchUsers = async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await searchUserByName(query.trim());
-      // 이미 참여 중인 멤버는 제외
-      const filteredResults = results.filter(
-        user => !participants.some(participant => participant.id === user.id)
-      );
-      setSearchResults(filteredResults);
-    } catch (error) {
-      console.error('Error searching users:', error);
-      Alert.alert('오류', '사용자 검색에 실패했습니다.');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // 멤버 추가 함수
-  const handleAddMember = async (newUser: User) => {
-    if (!trip || !id || typeof id !== 'string') return;
-
-    setIsUpdatingMembers(true);
-    try {
-      const updatedParticipants = [...trip.participants, newUser.id];
-      
-      // Firebase 업데이트
-      await updateTripParticipants(id, updatedParticipants);
-      
-      // 로컬 상태 업데이트
-      setTrip({ ...trip, participants: updatedParticipants });
-      setParticipants([...participants, newUser]);
-      
-      Alert.alert('성공', `${newUser.name}님이 여행에 추가되었습니다.`);
-      setMemberModalVisible(false);
-      setSearchQuery('');
-      setSearchResults([]);
-    } catch (error) {
-      console.error('Error adding member:', error);
-      Alert.alert('오류', '멤버 추가에 실패했습니다.');
-    } finally {
-      setIsUpdatingMembers(false);
-    }
-  };
-
-  // 멤버 삭제 함수
-  const handleRemoveMember = (userToRemove: User) => {
-    if (!trip || !id || typeof id !== 'string') return;
-    
-    // 여행 생성자는 삭제할 수 없음
-    if (userToRemove.id === trip.createdBy) {
-      Alert.alert('알림', '여행 생성자는 삭제할 수 없습니다.');
-      return;
-    }
-
-    // 본인 삭제 확인
-    if (userToRemove.id === currentUserId) {
-      Alert.alert(
-        '여행 나가기',
-        '정말로 이 여행에서 나가시겠습니까?',
-        [
-          { text: '취소', style: 'cancel' },
-          { 
-            text: '나가기', 
-            style: 'destructive',
-            onPress: () => removeMemberFromTrip(userToRemove)
-          }
-        ]
-      );
-    } else {
-      Alert.alert(
-        '멤버 삭제',
-        `${userToRemove.name}님을 여행에서 제외하시겠습니까?`,
-        [
-          { text: '취소', style: 'cancel' },
-          { 
-            text: '삭제', 
-            style: 'destructive',
-            onPress: () => removeMemberFromTrip(userToRemove)
-          }
-        ]
-      );
-    }
-  };
-
-  const removeMemberFromTrip = async (userToRemove: User) => {
-    if (!trip || !id || typeof id !== 'string') return;
-
-    setIsUpdatingMembers(true);
-    try {
-      const updatedParticipants = trip.participants.filter(
-        participantId => participantId !== userToRemove.id
-      );
-      
-      // Firebase 업데이트
-      await updateTripParticipants(id, updatedParticipants);
-      
-      // 로컬 상태 업데이트
-      setTrip({ ...trip, participants: updatedParticipants });
-      setParticipants(participants.filter(p => p.id !== userToRemove.id));
-      
-      if (userToRemove.id === currentUserId) {
-        // 본인이 나간 경우 여행 목록으로 이동
-        Alert.alert('완료', '여행에서 나왔습니다.', [
-          { text: '확인', onPress: () => router.back() }
-        ]);
-      } else {
-        Alert.alert('완료', `${userToRemove.name}님이 여행에서 제외되었습니다.`);
-      }
-    } catch (error) {
-      console.error('Error removing member:', error);
-      Alert.alert('오류', '멤버 삭제에 실패했습니다.');
-    } finally {
-      setIsUpdatingMembers(false);
-    }
   };
 
   if (loading) {
@@ -443,8 +295,11 @@ export default function TripDetailScreen() {
             <Text style={styles.tripSubtitle}>정산을 시작하세요!</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.timerButton}>
-          <Ionicons name="time" size={20} color="#4A90E2" />
+        <TouchableOpacity 
+          style={styles.timerButton}
+          onPress={() => router.push(`/trip/edit?id=${id}`)}
+        >
+          <Ionicons name="create-outline" size={20} color="#4A90E2" />
         </TouchableOpacity>
       </View>
 
@@ -553,66 +408,6 @@ export default function TripDetailScreen() {
                 </View>
               </View>
             )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* 멤버 관리 모달 */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={memberModalVisible}
-        onRequestClose={() => setMemberModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.memberModalContent}>
-            <View style={styles.memberModalHeader}>
-              <Text style={styles.memberModalTitle}>멤버 추가</Text>
-              <TouchableOpacity onPress={() => {
-                setMemberModalVisible(false);
-                setSearchQuery('');
-                setSearchResults([]);
-              }}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.searchContainer}>
-              <TextInput
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={(text) => {
-                  setSearchQuery(text);
-                  handleSearchUsers(text);
-                }}
-                placeholder="사용자 이름으로 검색"
-                placeholderTextColor="#999"
-              />
-              {isSearching && (
-                <ActivityIndicator size="small" color="#4A90E2" style={styles.searchLoader} />
-              )}
-            </View>
-
-            <ScrollView style={styles.searchResults}>
-              {searchResults.length > 0 ? (
-                searchResults.map((user) => (
-                  <TouchableOpacity
-                    key={user.id}
-                    style={styles.searchResultItem}
-                    onPress={() => handleAddMember(user)}
-                    disabled={isUpdatingMembers}
-                  >
-                    <View style={styles.searchResultInfo}>
-                      <Text style={styles.searchResultName}>{user.name}</Text>
-                      <Text style={styles.searchResultEmail}>{user.email}</Text>
-                    </View>
-                    <Ionicons name="add-circle" size={24} color="#4A90E2" />
-                  </TouchableOpacity>
-                ))
-              ) : searchQuery.length > 0 && !isSearching ? (
-                <Text style={styles.noResultsText}>검색 결과가 없습니다.</Text>
-              ) : null}
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -947,12 +742,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tripMateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#90CAF9',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#64B5F6',
+    marginRight: 8,
+    marginBottom: 8,
   },
   tripMateTagText: {
     fontSize: 14,
@@ -960,34 +759,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   creatorIcon: {
-    marginLeft: 8,
-  },
-  addMemberButton: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#64B5F6',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  addMemberText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1565C0',
-  },
-  updatingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-  },
-  updatingText: {
-    fontSize: 14,
-    color: '#4A90E2',
-    marginLeft: 8,
+    marginLeft: 4,
   },
   emptyExpensesContainer: {
     flex: 1,
@@ -1019,65 +791,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
-  memberModalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    maxHeight: '80%',
-  },
-  memberModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  memberModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  searchContainer: {
-    padding: 20,
-  },
-  searchInput: {
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  searchLoader: {
-    marginLeft: 12,
-  },
-  searchResults: {
-    flex: 1,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  searchResultInfo: {
-    flex: 1,
-  },
-  searchResultName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  searchResultEmail: {
-    fontSize: 14,
-    color: '#666',
-  },
-  noResultsText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 20,
-  },
 }); 
  
+

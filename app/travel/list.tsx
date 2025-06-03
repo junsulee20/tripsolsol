@@ -8,14 +8,25 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl
+  RefreshControl,
+  Image
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import TabLayout from '../../components/TabLayout';
 
+// 캐릭터 이미지 목록 및 키값
+const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
+const characterImages = [
+  require('../../assets/images/characters/bear.png'),
+  require('../../assets/images/characters/dino.png'),
+  require('../../assets/images/characters/dog.png'),
+  require('../../assets/images/characters/koala.png'),
+  require('../../assets/images/characters/cat.png'),
+];
+
 export default function TravelListScreen() {
-  const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; avatar: string; character?: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +44,8 @@ export default function TravelListScreen() {
       console.log('Already authenticated user found:', currentUser.uid);
       setUser({
         name: currentUser.displayName || '사용자',
-        avatar: currentUser.displayName?.charAt(0) || '사'
+        avatar: currentUser.displayName?.charAt(0) || '사',
+        character: currentUser.photoURL || undefined
       });
       loadTrips(currentUser.uid);
     }
@@ -46,12 +58,14 @@ export default function TravelListScreen() {
         console.log('User authenticated:', {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          displayName: firebaseUser.displayName
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL
         });
         
         setUser({
           name: firebaseUser.displayName || '사용자',
-          avatar: firebaseUser.displayName?.charAt(0) || '사'
+          avatar: firebaseUser.displayName?.charAt(0) || '사',
+          character: firebaseUser.photoURL || undefined
         });
         loadTrips(firebaseUser.uid);
       } else {
@@ -235,7 +249,15 @@ export default function TravelListScreen() {
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.avatar || '사'}</Text>
+            {user?.character && characterKeys.includes(user.character) ? (
+              <Image
+                source={characterImages[characterKeys.indexOf(user.character)]}
+                style={styles.characterImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{user?.avatar || '사'}</Text>
+            )}
           </View>
           <View style={styles.userTextContainer}>
             <Text style={styles.userName}>{user?.name || '사용자'}</Text>
@@ -321,6 +343,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  characterImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: 'white',
