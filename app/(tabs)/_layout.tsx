@@ -20,7 +20,7 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        tabBarStyle: { display: 'none' },
+        tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {},
       }}>
       <Tabs.Screen
         name="travel"
@@ -41,32 +41,6 @@ export default function TabLayout() {
         options={{
           title: '설정',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
-        }}
-      />
-      
-      {/* Hidden tabs for other pages */}
-      <Tabs.Screen
-        name="trip"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="qr"
-        options={{
-          href: null, // Hide from tab bar
-        }}
-      />
-      <Tabs.Screen
-        name="groups"
-        options={{
-          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

@@ -31,7 +31,6 @@ export default function RootLayout() {
         <Stack.Screen name="expense/detail" options={{ headerShown: false }} />
         <Stack.Screen name="travel/list" options={{ headerShown: false }} />
         <Stack.Screen name="expense/camera" options={{ headerShown: false }} />
-        <Stack.Screen name="expense/simple" options={{ headerShown: false }} />
         <Stack.Screen name="profile/edit" options={{ headerShown: false }} />
         <Stack.Screen name="profile/settings" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="qr/scan" options={{ headerShown: false }} />

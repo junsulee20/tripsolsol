@@ -10,7 +10,7 @@ import {
   View,
   RefreshControl
 } from 'react-native';
-import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection } from '../../services/firebaseService';
+import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, calculateRealTripBalances } from '../../services/firebaseService';
 import { Trip } from '../../types';
 import TabLayout from '../../components/TabLayout';
 
@@ -19,6 +19,7 @@ export default function TravelListScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tripBalances, setTripBalances] = useState<{ [tripId: string]: number }>({});
 
   useEffect(() => {
     console.log('TravelListScreen useEffect triggered');
@@ -63,6 +64,22 @@ export default function TravelListScreen() {
     return unsubscribe;
   }, []);
 
+  // 실제 정산 금액 계산 함수
+  const loadTripBalance = async (tripId: string) => {
+    try {
+      const balances = await calculateRealTripBalances(tripId);
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const userBalance = balances.find(b => b.userId === currentUser.uid);
+        const netBalance = userBalance ? userBalance.amount : 0;
+        setTripBalances(prev => ({ ...prev, [tripId]: netBalance }));
+      }
+    } catch (error) {
+      console.error('Error loading trip balance:', error);
+      setTripBalances(prev => ({ ...prev, [tripId]: 0 }));
+    }
+  };
+
   const loadTrips = async (userId: string) => {
     try {
       console.log('loadTrips called with userId:', userId);
@@ -73,6 +90,11 @@ export default function TravelListScreen() {
       
       setTrips(userTrips);
       console.log('Trips state updated, count:', userTrips.length);
+      
+      // 각 여행의 정산 금액 로드
+      for (const trip of userTrips) {
+        await loadTripBalance(trip.id);
+      }
     } catch (error) {
       console.error('Error loading trips:', error);
       Alert.alert('오류', '여행 목록을 불러오는데 실패했습니다.');
@@ -94,16 +116,6 @@ export default function TravelListScreen() {
     }
   };
 
-  // 정산 금액 계산 함수 (임시 - 실제로는 expenses를 기반으로 계산)
-  const calculateTripBalance = (tripId: string) => {
-    // 임시로 랜덤 값 반환 (나중에 실제 expense 데이터로 계산)
-    const randomBalance = Math.floor(Math.random() * 200) - 100;
-    return {
-      netBalance: randomBalance,
-      formattedBalance: randomBalance >= 0 ? `+₩${Math.abs(randomBalance).toLocaleString()}` : `-₩${Math.abs(randomBalance).toLocaleString()}`
-    };
-  };
-
   const handleAddTravel = () => {
     router.push('/trip/create');
   };
@@ -113,7 +125,8 @@ export default function TravelListScreen() {
   };
 
   const renderTravelItem = (travel: Trip) => {
-    const { formattedBalance } = calculateTripBalance(travel.id);
+    const netBalance = tripBalances[travel.id] || 0;
+    const formattedBalance = netBalance >= 0 ? `+₩${Math.abs(netBalance).toLocaleString()}` : `-₩${Math.abs(netBalance).toLocaleString()}`;
     
     return (
       <TouchableOpacity

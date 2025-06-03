@@ -24,23 +24,6 @@ import {
 import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
 
-// Mock data
-const mockTrips: Trip[] = [
-  {
-    id: 'trip-1',
-    name: '미국여행',
-    emoji: '🇺🇸',
-    description: '라스베이거스 여행',
-    startDate: new Date('2025-06-18'),
-    endDate: new Date('2025-06-20'),
-    participants: ['user1', 'user2', 'user3', 'user4'],
-    createdBy: 'user1',
-    createdAt: new Date('2025-01-15'),
-    currency: 'USD',
-    totalAmount: 500
-  }
-];
-
 // Auth Services
 export const signUp = async (email: string, password: string, name: string): Promise<User> => {
   try {
@@ -301,32 +284,146 @@ export const getTripById = async (tripId: string): Promise<Trip | null> => {
 
 // Expense Services
 export const addExpense = async (expense: Omit<Expense, 'id'>): Promise<string> => {
-  return `expense-${Date.now()}`;
+  try {
+    const expenseData = {
+      ...expense,
+      date: Timestamp.fromDate(expense.date),
+      createdAt: Timestamp.now()
+    };
+    
+    console.log('Creating expense with data:', expenseData);
+    const docRef = await addDoc(collection(db, 'expenses'), expenseData);
+    console.log('Expense created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating expense:', error);
+    throw new Error('지출 추가에 실패했습니다.');
+  }
 };
 
 export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
-  return [];
+  try {
+    const expensesRef = collection(db, 'expenses');
+    const q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    const expenses: Expense[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      expenses.push({
+        id: doc.id,
+        ...data,
+        date: data.date.toDate(),
+        createdAt: data.createdAt.toDate()
+      } as Expense);
+    });
+    
+    return expenses;
+  } catch (error) {
+    console.error('Error getting trip expenses:', error);
+    return [];
+  }
 };
 
 export const updateExpense = async (expenseId: string, updates: Partial<Expense>): Promise<void> => {
-  // Mock update
+  try {
+    const expenseRef = doc(db, 'expenses', expenseId);
+    const updatedData: any = { ...updates };
+    
+    if (updates.date) {
+      updatedData.date = Timestamp.fromDate(updates.date);
+    }
+    
+    await updateDoc(expenseRef, updatedData);
+    console.log('Expense updated successfully');
+  } catch (error) {
+    console.error('Error updating expense:', error);
+    throw new Error('지출 수정에 실패했습니다.');
+  }
 };
 
 export const deleteExpense = async (expenseId: string): Promise<void> => {
-  // Mock delete
+  try {
+    const expenseRef = doc(db, 'expenses', expenseId);
+    await deleteDoc(expenseRef);
+    console.log('Expense deleted successfully');
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    throw new Error('지출 삭제에 실패했습니다.');
+  }
 };
 
 // Settlement Services
 export const addSettlement = async (settlement: Omit<Settlement, 'id'>): Promise<string> => {
-  return `settlement-${Date.now()}`;
+  try {
+    const settlementData = {
+      ...settlement,
+      createdAt: Timestamp.now(),
+      settledAt: settlement.settledAt ? Timestamp.fromDate(settlement.settledAt) : null
+    };
+    
+    console.log('Creating settlement with data:', settlementData);
+    const docRef = await addDoc(collection(db, 'settlements'), settlementData);
+    console.log('Settlement created with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('Error creating settlement:', error);
+    throw new Error('정산 추가에 실패했습니다.');
+  }
 };
 
 export const getTripSettlements = async (tripId: string): Promise<Settlement[]> => {
-  return [];
+  try {
+    const settlementsRef = collection(db, 'settlements');
+    const q = query(settlementsRef, where('tripId', '==', tripId), orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    const settlements: Settlement[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      settlements.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+        settledAt: data.settledAt ? data.settledAt.toDate() : undefined
+      } as Settlement);
+    });
+    
+    return settlements;
+  } catch (error) {
+    console.error('Error getting trip settlements:', error);
+    return [];
+  }
 };
 
 export const markSettlementAsSettled = async (settlementId: string): Promise<void> => {
-  // Mock settle
+  try {
+    const settlementRef = doc(db, 'settlements', settlementId);
+    await updateDoc(settlementRef, {
+      settled: true,
+      settledAt: Timestamp.now()
+    });
+    console.log('Settlement marked as settled');
+  } catch (error) {
+    console.error('Error marking settlement as settled:', error);
+    throw new Error('정산 완료 처리에 실패했습니다.');
+  }
+};
+
+// Calculate real balances for a trip based on actual expenses
+export const calculateRealTripBalances = async (tripId: string): Promise<Balance[]> => {
+  try {
+    const trip = await getTripById(tripId);
+    if (!trip) {
+      throw new Error('여행을 찾을 수 없습니다.');
+    }
+    
+    const expenses = await getTripExpenses(tripId);
+    return calculateTripBalances(expenses, trip.participants);
+  } catch (error) {
+    console.error('Error calculating real trip balances:', error);
+    return [];
+  }
 };
 
 // Calculate balances for a trip
