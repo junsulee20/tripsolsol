@@ -1,12 +1,12 @@
+import { FirebaseError } from 'firebase/app';
 import {
   createUserWithEmailAndPassword,
   User as FirebaseUser,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile,
-  onAuthStateChanged
+  updateProfile
 } from 'firebase/auth';
-import { FirebaseError } from 'firebase/app';
 import {
   addDoc,
   collection,
@@ -14,12 +14,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  or,
   orderBy,
   query,
+  setDoc,
   Timestamp,
   updateDoc,
-  where,
-  setDoc
+  where
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
@@ -451,4 +452,32 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
     userId,
     amount: Math.round(amount * 100) / 100 // Round to 2 decimal places
   }));
+};
+
+// 특정 사용자가 관련된 모든 Settlement(정산 내역) 반환
+export const getUserSettlements = async (userId: string): Promise<Settlement[]> => {
+  try {
+    const settlementsRef = collection(db, 'settlements');
+    // from 또는 to가 userId인 Settlement 모두 조회
+    const q = query(
+      settlementsRef,
+      or(where('from', '==', userId), where('to', '==', userId)),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+    const settlements: Settlement[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      settlements.push({
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt.toDate(),
+        settledAt: data.settledAt ? data.settledAt.toDate() : undefined
+      } as Settlement);
+    });
+    return settlements;
+  } catch (error) {
+    console.error('Error getting user settlements:', error);
+    return [];
+  }
 }; 

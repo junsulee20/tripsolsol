@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { onAuthStateChange, getCurrentUser } from '../services/firebaseService';
+import { User as FirebaseUser } from 'firebase/auth';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { getCurrentUser, onAuthStateChange } from '../services/firebaseService';
 
 export default function IndexScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -18,7 +19,7 @@ export default function IndexScreen() {
     }
 
     // 인증 상태 변화 감지
-    const unsubscribe = onAuthStateChange((user) => {
+    const unsubscribe = onAuthStateChange((user: FirebaseUser | null) => {
       console.log('IndexScreen: Auth state changed', user ? 'Authenticated' : 'Not authenticated');
       
       if (user) {

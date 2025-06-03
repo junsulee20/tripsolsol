@@ -1,4 +1,4 @@
-import { getApp, initializeApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -15,19 +15,11 @@ const firebaseConfig = {
 };
 
 // Firebase 초기화
-let app;
-try {
-  app = initializeApp(firebaseConfig);
-} catch (error) {
-  // 이미 초기화된 경우 기존 앱 사용
-  app = getApp();
-}
+const app = initializeApp(firebaseConfig);
 
 // Firebase 서비스 초기화
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-
-
 
 export default app; 
