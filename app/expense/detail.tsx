@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,20 @@ import {
   Alert,
   ScrollView,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ActivityIndicator,
+  Modal
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
-
-const members = [
-  { id: '1', name: '김윤정', avatar: '김', amount: 0, percentage: 25 },
-  { id: '2', name: 'Junsu', avatar: 'J', amount: 0, percentage: 25 },
-  { id: '3', name: 'ВИКАЭМ', avatar: 'В', amount: 0, percentage: 25 },
-  { id: '4', name: '지한', avatar: '지', amount: 0, percentage: 25 },
-];
+import { 
+  addExpense, 
+  getTripById, 
+  getUsersByIds, 
+  getCurrentUser 
+} from '../../services/firebaseService';
+import { Trip, User, ExpenseCategory } from '../../types';
 
 const splitMethods = [
   { id: 'equal', name: '균일하게', description: '모든 사람이 동일한 금액' },
@@ -27,76 +29,282 @@ const splitMethods = [
   { id: 'custom', name: '직접 설정', description: '원하는 대로' },
 ];
 
+const currencies = [
+  { code: 'USD', name: '미국 달러', symbol: '$' },
+  { code: 'EUR', name: '유로', symbol: '€' },
+  { code: 'KRW', name: '한국 원', symbol: '₩' },
+  { code: 'JPY', name: '일본 엔', symbol: '¥' },
+  { code: 'GBP', name: '영국 파운드', symbol: '£' },
+  { code: 'CNY', name: '중국 위안', symbol: '¥' },
+  { code: 'AUD', name: '호주 달러', symbol: 'A$' },
+  { code: 'CAD', name: '캐나다 달러', symbol: 'C$' },
+  { code: 'CHF', name: '스위스 프랑', symbol: 'CHF' },
+  { code: 'SGD', name: '싱가포르 달러', symbol: 'S$' },
+  { code: 'THB', name: '태국 바트', symbol: '฿' },
+  { code: 'VND', name: '베트남 동', symbol: '₫' },
+];
+
+interface MemberAmount {
+  userId: string;
+  name: string;
+  amount: number;
+  percentage: number;
+}
+
 export default function ExpenseDetailScreen() {
-  const [paidBy, setPaidBy] = useState('김윤정');
-  const [splitMethod, setSplitMethod] = useState('equal');
-  const [totalAmount, setTotalAmount] = useState('1.00');
-  const [currency, setCurrency] = useState('US$');
+  const { tripId, tripName, ocrAmount, ocrDescription } = useLocalSearchParams();
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [members, setMembers] = useState<User[]>([]);
+  const [memberAmounts, setMemberAmounts] = useState<MemberAmount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+
+  // Form states
   const [description, setDescription] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [paidBy, setPaidBy] = useState('');
+  const [splitMethod, setSplitMethod] = useState('equal');
   const [memo, setMemo] = useState('');
-  const [memberAmounts, setMemberAmounts] = useState(members);
-  const [loading, setLoading] = useState(false);
 
-  const handleSplitMethodChange = (method: string) => {
-    setSplitMethod(method);
-    if (method === 'equal') {
-      const amount = parseFloat(totalAmount) / memberAmounts.length;
-      setMemberAmounts(memberAmounts.map(member => ({
-        ...member,
-        amount: amount,
-        percentage: 25
-      })));
+  useEffect(() => {
+    fetchTripData();
+  }, [tripId]);
+
+  useEffect(() => {
+    // OCR 결과가 있으면 자동으로 입력
+    if (ocrAmount && typeof ocrAmount === 'string') {
+      setTotalAmount(ocrAmount);
     }
-  };
-
-  const handleMemberAmountChange = (memberId: string, amount: string) => {
-    const numAmount = parseFloat(amount) || 0;
-    setMemberAmounts(memberAmounts.map(member => 
-      member.id === memberId 
-        ? { ...member, amount: numAmount }
-        : member
-    ));
-  };
-
-  const handleMemberPercentageChange = (memberId: string, percentage: number) => {
-    const totalAmountNum = parseFloat(totalAmount) || 0;
-    const amount = (totalAmountNum * percentage) / 100;
-    setMemberAmounts(memberAmounts.map(member => 
-      member.id === memberId 
-        ? { ...member, percentage, amount }
-        : member
-    ));
-  };
-
-  const handleSave = async () => {
-    if (!description.trim()) {
-      Alert.alert('오류', '내용을 입력해주세요.');
-      return;
+    if (ocrDescription && typeof ocrDescription === 'string') {
+      setDescription(ocrDescription);
     }
+  }, [ocrAmount, ocrDescription]);
 
-    if (!totalAmount || parseFloat(totalAmount) <= 0) {
-      Alert.alert('오류', '올바른 금액을 입력해주세요.');
-      return;
-    }
-
-    setLoading(true);
+  const fetchTripData = async () => {
+    if (!tripId || typeof tripId !== 'string') return;
+    
     try {
-      // TODO: Firebase에 정산 저장
-      Alert.alert('성공', '정산이 추가되었습니다!', [
-        { text: '확인', onPress: () => router.back() }
-      ]);
-    } catch (error: any) {
-      Alert.alert('오류', '정산 추가에 실패했습니다: ' + error.message);
+      setLoading(true);
+      
+      // Fetch trip data
+      const tripData = await getTripById(tripId);
+      if (!tripData) {
+        Alert.alert('오류', '여행 정보를 찾을 수 없습니다.');
+        router.back();
+        return;
+      }
+      
+      setTrip(tripData);
+      setCurrency(tripData.currency);
+      
+      // Fetch participants data
+      const participantUsers = await getUsersByIds(tripData.participants);
+      setMembers(participantUsers);
+      
+      // Initialize member amounts
+      const initialAmounts = participantUsers.map(user => ({
+        userId: user.id,
+        name: user.name,
+        amount: 0,
+        percentage: Math.round(100 / participantUsers.length)
+      }));
+      setMemberAmounts(initialAmounts);
+      
+      // Set first member as default payer
+      if (participantUsers.length > 0) {
+        setPaidBy(participantUsers[0].id);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching trip data:', error);
+      Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCurrencySelect = (selectedCurrency: string) => {
+    setCurrency(selectedCurrency);
+    setCurrencyModalVisible(false);
+  };
+
+  const getCurrencyInfo = (code: string) => {
+    return currencies.find(c => c.code === code) || currencies[0];
+  };
+
+  const handleCameraCapture = () => {
+    router.push({
+      pathname: '/expense/camera',
+      params: { tripId, tripName }
+    });
+  };
+
+  const handleAmountChange = (amount: string) => {
+    setTotalAmount(amount);
+    if (splitMethod === 'equal' && amount) {
+      const numAmount = parseFloat(amount) || 0;
+      const perPersonAmount = numAmount / memberAmounts.length;
+      setMemberAmounts(memberAmounts.map(member => ({
+        ...member,
+        amount: perPersonAmount,
+        percentage: Math.round(100 / memberAmounts.length)
+      })));
+    }
+  };
+
+  const handleSplitMethodChange = (method: string) => {
+    setSplitMethod(method);
+    const numAmount = parseFloat(totalAmount) || 0;
+    
+    if (method === 'equal') {
+      const perPersonAmount = numAmount / memberAmounts.length;
+      setMemberAmounts(memberAmounts.map(member => ({
+        ...member,
+        amount: perPersonAmount,
+        percentage: Math.round(100 / memberAmounts.length)
+      })));
+    }
+  };
+
+  const handleMemberAmountChange = (userId: string, amount: string) => {
+    const numAmount = parseFloat(amount) || 0;
+    const totalAmountNum = parseFloat(totalAmount) || 0;
+    const percentage = totalAmountNum > 0 ? (numAmount / totalAmountNum) * 100 : 0;
+    
+    setMemberAmounts(memberAmounts.map(member => 
+      member.userId === userId 
+        ? { ...member, amount: numAmount, percentage }
+        : member
+    ));
+  };
+
+  const handleMemberPercentageChange = (userId: string, percentage: number) => {
+    const totalAmountNum = parseFloat(totalAmount) || 0;
+    const amount = (totalAmountNum * percentage) / 100;
+    setMemberAmounts(memberAmounts.map(member => 
+      member.userId === userId 
+        ? { ...member, percentage, amount }
+        : member
+    ));
+  };
+
+  const validateForm = (): boolean => {
+    if (!description.trim()) {
+      Alert.alert('오류', '내용을 입력해주세요.');
+      return false;
+    }
+
+    if (!totalAmount || parseFloat(totalAmount) <= 0) {
+      Alert.alert('오류', '올바른 금액을 입력해주세요.');
+      return false;
+    }
+
+    if (!paidBy) {
+      Alert.alert('오류', '결제자를 선택해주세요.');
+      return false;
+    }
+
+    const totalSplitAmount = memberAmounts.reduce((sum, member) => sum + member.amount, 0);
+    const expectedAmount = parseFloat(totalAmount);
+    
+    if (Math.abs(totalSplitAmount - expectedAmount) > 0.01) {
+      Alert.alert('오류', '분할 금액의 합이 총 금액과 일치하지 않습니다.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+    if (!trip) return;
+
+    setSaving(true);
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        Alert.alert('오류', '로그인이 필요합니다.');
+        return;
+      }
+
+      const splitBetween = memberAmounts
+        .filter(member => member.amount > 0)
+        .map(member => member.userId);
+
+      const expenseData = {
+        tripId: trip.id,
+        title: description,
+        description: memo,
+        amount: parseFloat(totalAmount),
+        currency,
+        paidBy,
+        splitBetween,
+        category: ExpenseCategory.OTHER,
+        date: new Date(),
+        createdAt: new Date(),
+      };
+
+      await addExpense(expenseData);
+      
+      console.log('Successfully saved expense, navigating to trip:', trip.id);
+      
+      // 모든 스택을 정리하고 trip 페이지로 이동
+      router.replace(`/trip/${trip.id}`);
+    } catch (error: any) {
+      console.error('Error saving expense:', error);
+      Alert.alert('오류', '지출 추가에 실패했습니다: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const getAvatarColor = (name: string) => {
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFA726'];
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
   };
+
+  const renderMemberAmountItem = (member: MemberAmount) => (
+    <View key={member.userId} style={styles.memberItem}>
+      <View style={styles.memberInfo}>
+        <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.name) }]}>
+          <Text style={styles.memberAvatarText}>{member.name.charAt(0)}</Text>
+        </View>
+        <Text style={styles.memberName}>{member.name}</Text>
+      </View>
+      
+      <View style={styles.memberAmountContainer}>
+        {splitMethod === 'custom' && (
+          <TextInput
+            style={styles.memberAmountInput}
+            value={member.amount > 0 ? member.amount.toFixed(2) : ''}
+            onChangeText={(value) => handleMemberAmountChange(member.userId, value)}
+            placeholder="0.00"
+            keyboardType="numeric"
+          />
+        )}
+        
+        {splitMethod === 'unequal' && (
+          <View style={styles.percentageContainer}>
+            <TextInput
+              style={styles.percentageInput}
+              value={member.percentage > 0 ? member.percentage.toString() : ''}
+              onChangeText={(value) => handleMemberPercentageChange(member.userId, parseFloat(value) || 0)}
+              placeholder="0"
+              keyboardType="numeric"
+            />
+            <Text style={styles.percentageSymbol}>%</Text>
+          </View>
+        )}
+        
+        <Text style={styles.memberAmountText}>
+          {currency} {member.amount.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  );
 
   const renderSplitMethodItem = (method: any) => (
     <TouchableOpacity
@@ -117,42 +325,60 @@ export default function ExpenseDetailScreen() {
     </TouchableOpacity>
   );
 
-  const renderMemberItem = (member: any) => (
-    <View key={member.id} style={styles.memberItem}>
-      <View style={styles.memberInfo}>
-        <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.name) }]}>
-          <Text style={styles.memberAvatarText}>{member.avatar}</Text>
-        </View>
-        <Text style={styles.memberName}>{member.name}</Text>
-      </View>
-      
-      {splitMethod === 'custom' && (
-        <View style={styles.memberAmountContainer}>
-          <TouchableOpacity style={styles.editButton}>
-            <Ionicons name="create-outline" size={16} color="#4A90E2" />
+  const renderPayerSelector = () => (
+    <View style={styles.payerSelectorContainer}>
+      <Text style={styles.label}>누가 결제했나요?</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.payerScrollView}>
+        {members.map((member) => (
+          <TouchableOpacity
+            key={member.id}
+            style={[
+              styles.payerOption,
+              paidBy === member.id && styles.payerOptionSelected
+            ]}
+            onPress={() => setPaidBy(member.id)}
+          >
+            <View style={[
+              styles.payerAvatar, 
+              { backgroundColor: getAvatarColor(member.name) },
+              paidBy === member.id && styles.payerAvatarSelected
+            ]}>
+              <Text style={[
+                styles.payerAvatarText,
+                paidBy === member.id && styles.payerAvatarTextSelected
+              ]}>
+                {member.name.charAt(0)}
+              </Text>
+            </View>
+            <Text style={[
+              styles.payerName,
+              paidBy === member.id && styles.payerNameSelected
+            ]}>
+              {member.name}
+            </Text>
           </TouchableOpacity>
-          <Text style={styles.memberAmount}>
-            ${member.amount.toFixed(2)}
-          </Text>
-        </View>
-      )}
-      
-      {splitMethod === 'unequal' && (
-        <View style={styles.memberPercentageContainer}>
-          <Text style={styles.memberPercentage}>{member.percentage}%</Text>
-          <Text style={styles.memberAmount}>
-            ${member.amount.toFixed(1)}
-          </Text>
-        </View>
-      )}
-      
-      {splitMethod === 'equal' && (
-        <Text style={styles.memberAmount}>
-          ${member.amount.toFixed(2)}
-        </Text>
-      )}
+        ))}
+      </ScrollView>
     </View>
   );
+
+  if (loading) {
+    return (
+      <TabLayout>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>지출 추가하기</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+          <Text style={styles.loadingText}>여행 정보 불러오는 중...</Text>
+        </View>
+      </TabLayout>
+    );
+  }
 
   return (
     <TabLayout>
@@ -164,97 +390,165 @@ export default function ExpenseDetailScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>정산 추가 하기</Text>
+          <Text style={styles.headerTitle}>지출 추가하기</Text>
           <View style={styles.placeholder} />
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.tripInfo}>
             <View style={styles.tripIcon}>
-              <Ionicons name="airplane" size={20} color="white" />
+              {trip?.emoji ? (
+                <Text style={styles.tripEmoji}>{trip.emoji}</Text>
+              ) : (
+                <Ionicons name="airplane" size={20} color="white" />
+              )}
             </View>
-            <Text style={styles.tripName}>21학번 동기 유럽 여행</Text>
+            <Text style={styles.tripName}>{trip?.name || tripName}</Text>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>정산 방식을 선택해주세요</Text>
-            <View style={styles.paidByContainer}>
-              <Text style={styles.label}>누가 결제했나요?</Text>
-              <View style={styles.paidBySelector}>
-                <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(paidBy) }]}>
-                  <Text style={styles.memberAvatarText}>김</Text>
-                </View>
-                <Text style={styles.paidByName}>{paidBy}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.label}>어떻게 정산하고 싶으신가요?</Text>
-            <View style={styles.splitMethodsContainer}>
-              {splitMethods.map(renderSplitMethodItem)}
-            </View>
-
-            {splitMethod === 'custom' && (
-              <View style={styles.membersContainer}>
-                <TouchableOpacity style={styles.expandButton}>
-                  <Ionicons name="chevron-down" size={20} color="#4A90E2" />
-                </TouchableOpacity>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
-
-            {splitMethod === 'unequal' && (
-              <View style={styles.membersContainer}>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
-
-            {splitMethod === 'equal' && (
-              <View style={styles.membersContainer}>
-                {memberAmounts.map(renderMemberItem)}
-              </View>
-            )}
-          </View>
-
+          {/* 1. 내용 작성 섹션 (최상단) */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>내용을 작성해주세요</Text>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>제목</Text>
               <TextInput
-                style={styles.input}
+                style={styles.descriptionInput}
                 value={description}
                 onChangeText={setDescription}
                 placeholder="어떤 항목인지 입력해주세요"
+                multiline
               />
             </View>
+          </View>
 
+          {/* 2. 금액 입력 섹션 */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>금액을 입력해주세요</Text>
             <View style={styles.amountContainer}>
-              <Text style={styles.label}>화폐 / 금액</Text>
               <View style={styles.amountInputContainer}>
-                <View style={styles.currencySelector}>
-                  <Text style={styles.currencyText}>{currency}</Text>
-                </View>
+                <TouchableOpacity 
+                  style={styles.currencySelector}
+                  onPress={() => setCurrencyModalVisible(true)}
+                >
+                  <Text style={styles.currencyText}>{getCurrencyInfo(currency).code}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" style={styles.currencyIcon} />
+                </TouchableOpacity>
                 <TextInput
                   style={styles.amountInput}
                   value={totalAmount}
-                  onChangeText={setTotalAmount}
-                  placeholder="3.00"
+                  onChangeText={handleAmountChange}
+                  placeholder="0.00"
                   keyboardType="numeric"
                 />
+                <TouchableOpacity 
+                  style={styles.cameraButton}
+                  onPress={handleCameraCapture}
+                >
+                  <Ionicons name="camera" size={20} color="#4A90E2" />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={loading}
-          >
-            <Text style={styles.saveButtonText}>
-              {loading ? '저장 중...' : '저장'}
-            </Text>
-          </TouchableOpacity>
+          {/* 3. 결제자 선택 (금액 입력 후에만 표시) */}
+          {totalAmount && parseFloat(totalAmount) > 0 && (
+            <>
+              <View style={styles.section}>
+                {renderPayerSelector()}
+              </View>
+
+              {/* 4. 정산 방식 선택 */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>어떻게 정산하고 싶으신가요?</Text>
+                <View style={styles.splitMethodsContainer}>
+                  {splitMethods.map(renderSplitMethodItem)}
+                </View>
+              </View>
+
+              {/* 5. 멤버별 금액 표시 */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>각자 내야 할 금액</Text>
+                <View style={styles.membersContainer}>
+                  {memberAmounts.map(renderMemberAmountItem)}
+                </View>
+                
+                <View style={styles.totalSummary}>
+                  <Text style={styles.totalSummaryText}>
+                    총합: {currency} {memberAmounts.reduce((sum, member) => sum + member.amount, 0).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 6. 메모 (선택사항) */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>메모 (선택사항)</Text>
+                <TextInput
+                  style={styles.memoInput}
+                  value={memo}
+                  onChangeText={setMemo}
+                  placeholder="추가 설명이 있다면 입력해주세요"
+                  multiline
+                />
+              </View>
+            </>
+          )}
+
+          {/* 저장 버튼 */}
+          {totalAmount && parseFloat(totalAmount) > 0 && paidBy && (
+            <TouchableOpacity
+              style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? '저장 중...' : '저장'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Currency Selection Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={currencyModalVisible}
+        onRequestClose={() => setCurrencyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.currencyModalContent}>
+            <View style={styles.currencyModalHeader}>
+              <Text style={styles.currencyModalTitle}>화폐 선택</Text>
+              <TouchableOpacity onPress={() => setCurrencyModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.currencyList}>
+              {currencies.map((currencyItem) => (
+                <TouchableOpacity
+                  key={currencyItem.code}
+                  style={[
+                    styles.currencyItem,
+                    currency === currencyItem.code && styles.currencyItemSelected
+                  ]}
+                  onPress={() => handleCurrencySelect(currencyItem.code)}
+                >
+                  <View style={styles.currencyItemLeft}>
+                    <Text style={styles.currencySymbol}>{currencyItem.symbol}</Text>
+                    <View>
+                      <Text style={styles.currencyCode}>{currencyItem.code}</Text>
+                      <Text style={styles.currencyName}>{currencyItem.name}</Text>
+                    </View>
+                  </View>
+                  {currency === currencyItem.code && (
+                    <Ionicons name="checkmark" size={20} color="#4A90E2" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </TabLayout>
   );
 }
@@ -262,24 +556,19 @@ export default function ExpenseDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: 'white',
   },
   backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
@@ -287,10 +576,21 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   placeholder: {
-    width: 32,
+    width: 40,
   },
   content: {
     flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
   tripInfo: {
     flexDirection: 'row',
@@ -300,13 +600,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   tripIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#4A90E2',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
+  },
+  tripEmoji: {
+    fontSize: 20,
   },
   tripName: {
     fontSize: 16,
@@ -315,37 +618,115 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: 'white',
-    padding: 20,
     marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 16,
   },
-  paidByContainer: {
-    marginBottom: 24,
+  inputContainer: {
+    marginBottom: 16,
+  },
+  descriptionInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 50,
+    textAlignVertical: 'top',
+  },
+  amountContainer: {
+    alignItems: 'center',
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  currencySelector: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currencyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  currencyIcon: {
+    marginLeft: 8,
+  },
+  amountInput: {
+    flex: 1,
+    padding: 12,
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  cameraButton: {
+    padding: 8,
+  },
+  payerSelectorContainer: {
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
     marginBottom: 12,
   },
-  paidBySelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+  payerScrollView: {
+    maxHeight: 100,
   },
-  paidByName: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 12,
+  payerOption: {
+    alignItems: 'center',
+    marginRight: 16,
+    padding: 8,
+    borderRadius: 8,
+  },
+  payerOptionSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  payerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  payerAvatarSelected: {
+    borderWidth: 2,
+    borderColor: '#4A90E2',
+  },
+  payerAvatarText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+  },
+  payerAvatarTextSelected: {
+    color: 'white',
+  },
+  payerName: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  payerNameSelected: {
+    color: '#4A90E2',
+    fontWeight: '600',
   },
   splitMethodsContainer: {
     marginBottom: 20,
@@ -353,27 +734,26 @@ const styles = StyleSheet.create({
   splitMethodItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
     marginBottom: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#e0e0e0',
   },
   splitMethodItemSelected: {
-    backgroundColor: '#E3F2FD',
     borderColor: '#4A90E2',
+    backgroundColor: '#E3F2FD',
   },
   radioButton: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
+    borderColor: '#e0e0e0',
     marginRight: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   radioButtonSelected: {
     width: 10,
@@ -386,28 +766,24 @@ const styles = StyleSheet.create({
   },
   splitMethodName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
   },
   splitMethodDescription: {
     fontSize: 14,
     color: '#666',
+    marginTop: 2,
   },
   membersContainer: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
-    padding: 16,
-  },
-  expandButton: {
-    alignSelf: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   memberItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   memberInfo: {
     flexDirection: 'row',
@@ -415,98 +791,154 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   memberAvatarText: {
-    color: 'white',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
+    color: 'white',
   },
   memberName: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
   },
   memberAmountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  editButton: {
-    padding: 4,
+  memberAmountInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 14,
+    width: 70,
+    textAlign: 'center',
     marginRight: 8,
   },
-  memberAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  memberPercentageContainer: {
-    alignItems: 'flex-end',
-  },
-  memberPercentage: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: 'white',
-  },
-  amountContainer: {
-    marginBottom: 20,
-  },
-  amountInputContainer: {
+  percentageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 8,
   },
-  currencySelector: {
-    backgroundColor: '#F8F9FA',
+  percentageInput: {
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginRight: 12,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 14,
+    width: 50,
+    textAlign: 'center',
   },
-  currencyText: {
+  percentageSymbol: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 4,
+  },
+  memberAmountText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A90E2',
+    minWidth: 70,
+    textAlign: 'right',
+  },
+  totalSummary: {
+    borderTopWidth: 2,
+    borderTopColor: '#4A90E2',
+    paddingTop: 12,
+    alignItems: 'center',
+  },
+  totalSummaryText: {
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#4A90E2',
   },
-  amountInput: {
-    flex: 1,
+  memoInput: {
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#e0e0e0',
     borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: 'white',
+    padding: 12,
+    fontSize: 14,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   saveButton: {
     backgroundColor: '#4A90E2',
-    borderRadius: 12,
-    padding: 16,
+    marginHorizontal: 20,
+    marginBottom: 30,
+    paddingVertical: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    margin: 20,
   },
   saveButtonDisabled: {
-    backgroundColor: '#BDC3C7',
+    backgroundColor: '#ccc',
   },
   saveButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  currencyModalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  currencyModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  currencyModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  currencyList: {
+    maxHeight: 200,
+  },
+  currencyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  currencyItemSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  currencyItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  currencySymbol: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 8,
+  },
+  currencyCode: {
+    fontSize: 14,
+    color: '#666',
+  },
+  currencyName: {
+    fontSize: 14,
+    color: '#666',
   },
 }); 
