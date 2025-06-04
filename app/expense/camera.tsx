@@ -26,31 +26,97 @@ export default function CameraScreen() {
       setLoading(true);
       console.log('Starting gallery selection...');
       
+      // 먼저 미디어 라이브러리 권한 요청
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('Media library permission status:', status);
+      
       if (status !== 'granted') {
-        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+        Alert.alert(
+          '권한 필요', 
+          '갤러리 접근 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { 
+              text: '설정으로', 
+              onPress: () => {
+                // 설정 앱으로 이동하는 코드는 플랫폼별로 다름
+                console.log('User needs to go to settings to enable permissions');
+              }
+            }
+          ]
+        );
         return;
       }
 
       console.log('Gallery permission granted, launching image picker...');
+      
+      // ImagePicker 옵션 개선
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
+        base64: false, // base64는 메모리 사용량이 크므로 false로 설정
+        exif: false, // EXIF 데이터는 불필요하므로 false
       });
 
       console.log('Image picker result:', result);
 
-      if (!result.canceled && result.assets[0]) {
-        console.log('Selected image URI:', result.assets[0].uri);
-        await processImage(result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        console.log('Selected image URI:', selectedAsset.uri);
+        console.log('Image details:', {
+          width: selectedAsset.width,
+          height: selectedAsset.height,
+          fileSize: selectedAsset.fileSize
+        });
+        
+        // 이미지 크기 검증 (선택사항)
+        if (selectedAsset.fileSize && selectedAsset.fileSize > 10 * 1024 * 1024) { // 10MB 제한
+          Alert.alert(
+            '이미지 크기 초과',
+            '이미지 파일이 너무 큽니다. 10MB 이하의 이미지를 선택해주세요.',
+            [{ text: '확인' }]
+          );
+          return;
+        }
+        
+        await processImage(selectedAsset.uri);
       } else {
         console.log('Image selection was canceled or no image selected');
       }
     } catch (error: any) {
-      console.error('Gallery error:', error);
-      Alert.alert('오류', '갤러리에서 이미지를 선택하는데 실패했습니다: ' + error.message);
+      console.error('=== Gallery Selection Error ===');
+      console.error('Error type:', typeof error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // 구체적인 오류 메시지 제공
+      let userMessage = '갤러리에서 이미지를 선택하는데 실패했습니다.';
+      
+      if (error.message.includes('ImageLoader') || error.message.includes('not found')) {
+        userMessage = '이미지 처리 모듈에 문제가 있습니다. 앱을 재시작 후 다시 시도해주세요.';
+      } else if (error.message.includes('permission') || error.message.includes('Permission')) {
+        userMessage = '갤러리 접근 권한이 필요합니다. 설정에서 권한을 허용해주세요.';
+      } else if (error.message.includes('cancelled') || error.message.includes('canceled')) {
+        console.log('User cancelled image selection');
+        return; // 사용자가 취소한 경우는 오류 메시지 표시 안함
+      }
+      
+      Alert.alert(
+        '갤러리 오류', 
+        userMessage,
+        [
+          { text: '확인', style: 'default' },
+          {
+            text: '카메라 사용',
+            onPress: () => {
+              console.log('Fallback to camera due to gallery error');
+              handleTakePhoto();
+            }
+          }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -125,15 +191,37 @@ export default function CameraScreen() {
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
       
-      // 더 상세한 오류 정보 표시
-      const errorMessage = `OCR 처리 실패:\n${error.message}\n\n개발자 정보:\n${error.stack?.substring(0, 200) || '스택 정보 없음'}`;
+      // 사용자 친화적 오류 메시지와 대안 제공
+      const errorMessage = error.message || 'OCR 처리 중 알 수 없는 오류가 발생했습니다.';
       
       Alert.alert(
-        '오류', 
+        'OCR 처리 실패', 
         errorMessage,
         [
-          { text: '확인', style: 'default' },
-          { text: '다시 시도', onPress: () => console.log('사용자가 다시 시도를 선택함') }
+          { text: '취소', style: 'cancel' },
+          { 
+            text: '다시 시도', 
+            onPress: () => {
+              console.log('User chose to retry OCR');
+              // 현재 이미지로 다시 시도하지 않고 새로운 촬영/선택 유도
+            }
+          },
+          {
+            text: '수동 입력',
+            onPress: () => {
+              console.log('User chose manual input due to OCR failure');
+              router.replace({
+                pathname: '/expense/detail',
+                params: { 
+                  tripId, 
+                  tripName,
+                  ocrAmount: '',
+                  ocrDescription: '',
+                  ocrError: 'true' // OCR 실패 상태를 전달
+                }
+              });
+            }
+          }
         ]
       );
     } finally {
@@ -271,61 +359,6 @@ export default function CameraScreen() {
             <Text style={styles.controlButtonText}>전환</Text>
           </TouchableOpacity>
         </View>
-
-        {/* OCR 테스트 버튼 */}
-        <TouchableOpacity 
-          style={styles.testButton}
-          onPress={async () => {
-            try {
-              // 테스트용 가짜 이미지 URI로 OCR 테스트
-              Alert.alert(
-                'OCR 테스트',
-                'OCR 기능을 테스트하시겠습니까? (가짜 데이터로 테스트)',
-                [
-                  { text: '취소', style: 'cancel' },
-                  { 
-                    text: '테스트', 
-                    onPress: async () => {
-                      console.log('OCR 테스트 시작...');
-                      const testResult: OCRResult = {
-                        amount: '12500',
-                        description: '테스트 카페',
-                        rawText: '테스트 카페\n아메리카노 5000원\n라떼 7500원\n합계 12500원',
-                        confidence: 0.95
-                      };
-                      
-                      Alert.alert(
-                        'OCR 테스트 결과',
-                        `금액: ${testResult.amount}\n설명: ${testResult.description}`,
-                        [
-                          { text: '확인' },
-                          {
-                            text: '적용하기',
-                            onPress: () => {
-                              router.replace({
-                                pathname: '/expense/detail',
-                                params: { 
-                                  tripId, 
-                                  tripName,
-                                  ocrAmount: testResult.amount,
-                                  ocrDescription: testResult.description
-                                }
-                              });
-                            }
-                          }
-                        ]
-                      );
-                    }
-                  }
-                ]
-              );
-            } catch (error) {
-              console.error('OCR 테스트 오류:', error);
-            }
-          }}
-        >
-          <Text style={styles.testButtonText}>OCR 테스트</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -512,17 +545,5 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     paddingHorizontal: 20,
     lineHeight: 20,
-  },
-  testButton: {
-    backgroundColor: '#4A90E2',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  testButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
   },
 }); 
