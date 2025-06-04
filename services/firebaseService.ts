@@ -159,6 +159,37 @@ export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
   }
 };
 
+export const updateUserProfile = async (updates: { displayName?: string; bankAccount?: string }): Promise<void> => {
+  try {
+    const user = getCurrentUser();
+    if (!user) {
+      throw new Error('로그인된 사용자를 찾을 수 없습니다.');
+    }
+
+    // Firebase Auth 프로필 업데이트
+    if (updates.displayName) {
+      await updateProfile(user, { displayName: updates.displayName });
+    }
+
+    // Firestore 사용자 문서 업데이트
+    const userRef = doc(db, 'users', user.uid);
+    const updateData: any = {};
+    
+    if (updates.displayName) {
+      updateData.name = updates.displayName;
+    }
+    if (updates.bankAccount !== undefined) {
+      updateData.bankAccount = updates.bankAccount;
+    }
+
+    await updateDoc(userRef, updateData);
+    console.log('User profile updated successfully');
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw new Error('프로필 업데이트에 실패했습니다.');
+  }
+};
+
 // 닉네임으로 사용자 검색
 export const searchUserByName = async (name: string): Promise<User[]> => {
   try {

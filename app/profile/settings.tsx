@@ -260,7 +260,7 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/balance')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('./settlements')}>
             <View style={styles.menuIcon}>
               <Ionicons name="wallet-outline" size={20} color="#333" />
             </View>
