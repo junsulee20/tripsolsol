@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "영수증을 스캔하기 위해 카메라 권한이 필요합니다.",
-        "NSPhotoLibraryUsageDescription": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다."
+        "NSPhotoLibraryUsageDescription": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
+        "NSPhotoLibraryAddUsageDescription": "사진을 저장하기 위해 갤러리 접근 권한이 필요합니다."
       }
     },
     "android": {
@@ -24,7 +25,8 @@
       "package": "com.jeehana.tripsolsol",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -43,11 +45,17 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-barcode-scanner",
       [
         "expo-camera",
         {
           "cameraPermission": "영수증을 스캔하기 위해 카메라 권한이 필요합니다."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
+          "cameraPermission": "영수증을 촬영하기 위해 카메라 권한이 필요합니다."
         }
       ]
     ],
@@ -58,7 +66,8 @@
       "router": {},
       "eas": {
         "projectId": "766196c1-2f97-4773-b78d-16c10e3ec729"
-      }
+      },
+      "exchangeApiKey": "EKqvkPcQXQukgtH8tVtmPH7AQkSwcBHE"
     },
     "owner": "jeehana"
   }

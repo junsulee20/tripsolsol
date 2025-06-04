@@ -69,7 +69,7 @@ export default function BalanceScreen() {
           toUserId: settlement.toUserId,
           fromUserName: participantMap.get(settlement.fromUserId)?.name || '알 수 없음',
           toUserName: participantMap.get(settlement.toUserId)?.name || '알 수 없음',
-          toUserBankAccount: participantMap.get(settlement.toUserId)?.bankAccount,
+          toUserBankAccount: (participantMap.get(settlement.toUserId) as any)?.bankAccount,
           amount: settlement.amount,
           currency: tripData.currency
         }));
@@ -187,11 +187,6 @@ export default function BalanceScreen() {
   const myPayments = balanceItems.filter(item => item.fromUserId === currentUserId);
   const myReceivables = balanceItems.filter(item => item.toUserId === currentUserId);
   
-  // 다른 사용자들 간의 정산 (현재 사용자와 무관한 것들)
-  const otherSettlements = balanceItems.filter(item => 
-    item.fromUserId !== currentUserId && item.toUserId !== currentUserId
-  );
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -250,37 +245,16 @@ export default function BalanceScreen() {
           </View>
         )}
 
-        {/* 다른 사람들 간의 정산 */}
-        {otherSettlements.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>👥 다른 사람들 간의 정산</Text>
-            {otherSettlements.map((item, index) => (
-              <View key={index} style={styles.balanceItem}>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>
-                    {item.fromUserName} → {item.toUserName}
-                  </Text>
-                  <Text style={styles.itemAmount}>
-                    {item.currency} {item.amount.toLocaleString()}
-                  </Text>
-                </View>
-                {item.toUserBankAccount && (
-                  <View style={styles.bankAccountInfo}>
-                    <Ionicons name="card" size={14} color="#666" />
-                    <Text style={styles.bankAccountInfoText}>{item.toUserBankAccount}</Text>
-                  </View>
-                )}
-                {!item.toUserBankAccount && (
-                  <Text style={styles.noBankAccount}>계좌번호 미등록</Text>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-
         {balanceItems.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>정산할 내역이 없습니다.</Text>
+            <Text style={styles.emptyStateSubtext}>모든 정산이 완료되었습니다! 🎉</Text>
+          </View>
+        )}
+
+        {myPayments.length === 0 && myReceivables.length === 0 && balanceItems.length > 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>나와 관련된 정산이 없습니다.</Text>
             <Text style={styles.emptyStateSubtext}>모든 정산이 완료되었습니다! 🎉</Text>
           </View>
         )}
@@ -388,18 +362,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginRight: 8,
     flex: 1,
-  },
-  bankAccountInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 6,
-    padding: 8,
-  },
-  bankAccountInfoText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 6,
   },
   noBankAccount: {
     fontSize: 12,

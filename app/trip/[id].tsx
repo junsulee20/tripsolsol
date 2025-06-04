@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
+import { convertToKRW } from '../../services/exchangeService';
 import { Trip, User, Expense, ExpenseSplit } from '../../types';
 
 export default function TripDetailScreen() {
@@ -25,6 +26,8 @@ export default function TripDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // 환율 변환된 지출 데이터
+  const [convertedExpenses, setConvertedExpenses] = useState<{ [expenseId: string]: number }>({});
   
   useEffect(() => {
     const fetchTripData = async () => {
@@ -64,6 +67,9 @@ export default function TripDetailScreen() {
         console.log('Fetched expenses for tripId:', id);
         console.log('Expenses data:', expensesData);
         setExpenses(expensesData);
+        
+        // 환율 변환 수행
+        await convertExpensesToKRW(expensesData);
       } catch (error) {
         console.error('Error fetching trip data:', error);
         Alert.alert('오류', '여행 정보를 불러오는데 실패했습니다.');
@@ -75,9 +81,34 @@ export default function TripDetailScreen() {
     fetchTripData();
   }, [id]);
 
-  // 개별 지출에 대한 받을돈/줄돈 계산
+  // 지출을 KRW로 변환
+  const convertExpensesToKRW = async (expensesData: Expense[]) => {
+    const converted: { [expenseId: string]: number } = {};
+    
+    for (const expense of expensesData) {
+      if (expense.currency && expense.currency !== 'KRW' && expense.currency !== 'KWR') {
+        try {
+          const convertedAmount = await convertToKRW(expense.amount, expense.currency);
+          converted[expense.id] = convertedAmount;
+          console.log(`Converted ${expense.amount} ${expense.currency} to ${convertedAmount} KRW`);
+        } catch (error) {
+          console.error(`Error converting ${expense.currency} to KRW:`, error);
+          converted[expense.id] = expense.amount; // 실패 시 원래 금액 사용
+        }
+      } else {
+        converted[expense.id] = expense.amount; // 이미 KRW인 경우
+      }
+    }
+    
+    setConvertedExpenses(converted);
+  };
+
+  // 개별 지출에 대한 받을돈/줄돈 계산 (환율 적용)
   const calculateExpenseAmount = (expense: Expense) => {
     if (!currentUserId) return { amount: 0, type: 'owe' as 'owe' | 'receive' };
+    
+    // 환율 변환된 금액 사용
+    const convertedAmount = convertedExpenses[expense.id] || expense.amount;
     
     // splitDetails가 있는 경우 더 정확한 계산 사용
     if (expense.splitDetails && expense.splitDetails.length > 0) {
@@ -85,7 +116,11 @@ export default function TripDetailScreen() {
         // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
         const othersAmount = expense.splitDetails
           .filter(split => split.userId !== currentUserId)
-          .reduce((total, split) => total + split.amount, 0);
+          .reduce((total, split) => {
+            // 각 분할도 환율 적용
+            const convertedSplitAmount = (split.amount / expense.amount) * convertedAmount;
+            return total + convertedSplitAmount;
+          }, 0);
         return {
           amount: othersAmount,
           type: 'receive' as 'receive'
@@ -94,15 +129,16 @@ export default function TripDetailScreen() {
         // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
         const myShare = expense.splitDetails.find(split => split.userId === currentUserId);
         if (myShare) {
+          const convertedSplitAmount = (myShare.amount / expense.amount) * convertedAmount;
           return {
-            amount: myShare.amount,
+            amount: convertedSplitAmount,
             type: 'owe' as 'owe'
           };
         }
       }
     } else {
       // 기존 방식 (균등 분할)
-      const splitAmount = expense.amount / expense.splitBetween.length;
+      const splitAmount = convertedAmount / expense.splitBetween.length;
       
       if (expense.paidBy === currentUserId) {
         // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
@@ -231,6 +267,8 @@ export default function TripDetailScreen() {
   const renderExpenseItem = (expense: Expense) => {
     const { amount, type } = calculateExpenseAmount(expense);
     const paidByUser = participants.find(p => p.id === expense.paidBy);
+    const convertedAmount = convertedExpenses[expense.id] || expense.amount;
+    const isConvertedCurrency = expense.currency && expense.currency !== 'KRW' && expense.currency !== 'KWR';
     
     return (
       <TouchableOpacity
@@ -258,8 +296,13 @@ export default function TripDetailScreen() {
             styles.expenseAmount,
             { color: type === 'receive' ? '#FF6B6B' : '#4A90E2' }
           ]}>
-            {expense.currency} {amount.toFixed(0)}
+            KRW {Math.round(amount).toLocaleString()}
           </Text>
+          {isConvertedCurrency && (
+            <Text style={styles.originalCurrency}>
+              ({expense.currency} {expense.amount.toLocaleString()})
+            </Text>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -359,6 +402,14 @@ export default function TripDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* 플로팅 액션 버튼 - 지출 추가 */}
+      <TouchableOpacity 
+        style={styles.floatingActionButton}
+        onPress={() => router.push(`/expense/detail?tripId=${id}&tripName=${trip?.name || ''}`)}
+      >
+        <Ionicons name="add" size={24} color="white" />
+      </TouchableOpacity>
 
       <Modal
         animationType="slide"
@@ -603,6 +654,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FF6B6B',
   },
+  originalCurrency: {
+    fontSize: 12,
+    color: '#666',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -837,6 +892,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'white',
   },
+  floatingActionButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    zIndex: 1000,
+  },
 }); 
  
-

@@ -159,6 +159,37 @@ export const getUsersByIds = async (userIds: string[]): Promise<User[]> => {
   }
 };
 
+export const updateUserProfile = async (updates: { displayName?: string; bankAccount?: string }): Promise<void> => {
+  try {
+    const user = getCurrentUser();
+    if (!user) {
+      throw new Error('로그인된 사용자를 찾을 수 없습니다.');
+    }
+
+    // Firebase Auth 프로필 업데이트
+    if (updates.displayName) {
+      await updateProfile(user, { displayName: updates.displayName });
+    }
+
+    // Firestore 사용자 문서 업데이트
+    const userRef = doc(db, 'users', user.uid);
+    const updateData: any = {};
+    
+    if (updates.displayName) {
+      updateData.name = updates.displayName;
+    }
+    if (updates.bankAccount !== undefined) {
+      updateData.bankAccount = updates.bankAccount;
+    }
+
+    await updateDoc(userRef, updateData);
+    console.log('User profile updated successfully');
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw new Error('프로필 업데이트에 실패했습니다.');
+  }
+};
+
 // 닉네임으로 사용자 검색
 export const searchUserByName = async (name: string): Promise<User[]> => {
   try {
@@ -537,5 +568,26 @@ export const getUserSettlements = async (userId: string): Promise<Settlement[]> 
   } catch (error) {
     console.error('Error getting user settlements:', error);
     return [];
+  }
+};
+
+// 현재 로그인한 사용자의 Firestore 정보 가져오기 (캐릭터 정보 포함)
+export const getCurrentUserFromFirestore = async (): Promise<(User & { photoURL?: string }) | null> => {
+  try {
+    const authUser = getCurrentUser();
+    if (!authUser) return null;
+
+    const userDoc = await getDoc(doc(db, 'users', authUser.uid));
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as User;
+      return {
+        ...userData,
+        photoURL: authUser.photoURL || userData.photoURL || undefined
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting current user from Firestore:', error);
+    return null;
   }
 }; 

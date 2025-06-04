@@ -11,7 +11,7 @@ import {
   RefreshControl,
   Image
 } from 'react-native';
-import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses } from '../../services/firebaseService';
+import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import TabLayout from '../../components/TabLayout';
 
@@ -42,11 +42,7 @@ export default function TravelListScreen() {
     const currentUser = getCurrentUser();
     if (currentUser) {
       console.log('Already authenticated user found:', currentUser.uid);
-      setUser({
-        name: currentUser.displayName || '사용자',
-        avatar: currentUser.displayName?.charAt(0) || '사',
-        character: currentUser.photoURL || undefined
-      });
+      loadUserInfo();
       loadTrips(currentUser.uid);
     }
     
@@ -62,11 +58,7 @@ export default function TravelListScreen() {
           photoURL: firebaseUser.photoURL
         });
         
-        setUser({
-          name: firebaseUser.displayName || '사용자',
-          avatar: firebaseUser.displayName?.charAt(0) || '사',
-          character: firebaseUser.photoURL || undefined
-        });
+        loadUserInfo();
         loadTrips(firebaseUser.uid);
       } else {
         console.log('No authenticated user, redirecting to login');
@@ -77,6 +69,31 @@ export default function TravelListScreen() {
 
     return unsubscribe;
   }, []);
+
+  // 사용자 정보 로드 (Firestore에서 최신 캐릭터 정보 포함)
+  const loadUserInfo = async () => {
+    try {
+      const userInfo = await getCurrentUserFromFirestore();
+      if (userInfo) {
+        setUser({
+          name: userInfo.name || '사용자',
+          avatar: userInfo.name?.charAt(0) || '사',
+          character: userInfo.photoURL || undefined
+        });
+      }
+    } catch (error) {
+      console.error('Error loading user info:', error);
+      // 실패 시 기본값 설정
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        setUser({
+          name: currentUser.displayName || '사용자',
+          avatar: currentUser.displayName?.charAt(0) || '사',
+          character: currentUser.photoURL || undefined
+        });
+      }
+    }
+  };
 
   // 개별 지출에 대한 받을돈/줄돈 계산 (trip/[id]와 동일한 로직)
   const calculateExpenseAmount = (expense: Expense, currentUserId: string) => {
@@ -168,6 +185,7 @@ export default function TravelListScreen() {
     
     if (currentUser) {
       setRefreshing(true);
+      loadUserInfo();
       loadTrips(currentUser.uid);
     }
   };
@@ -288,7 +306,6 @@ export default function TravelListScreen() {
         }
       >
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>여행 목록</Text>
           <View style={styles.travelsList}>
             {trips.length > 0 ? (
               trips.map(renderTravelItem)

@@ -36,6 +36,7 @@ export default function RootLayout() {
         <Stack.Screen name="qr/scan" options={{ headerShown: false }} />
         <Stack.Screen name="qr/generate" options={{ headerShown: false }} />
         <Stack.Screen name="balance/index" options={{ headerShown: false }} />
+        <Stack.Screen name="profile/settlements" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

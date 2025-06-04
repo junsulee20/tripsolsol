@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BarCodeScanner, BarCodeScannerProps } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -13,13 +13,20 @@ import {
   View
 } from "react-native";
 
-const Scanner = BarCodeScanner as unknown as
-  React.ComponentType<BarCodeScannerProps>;
+// 웹용 QR 스캔을 위한 jsQR import
+let jsQR: any = null;
+if (Platform.OS === 'web') {
+  try {
+    jsQR = require('jsqr');
+  } catch (error) {
+    console.warn('jsQR library not available for web QR scanning');
+  }
+}
 
 /* --------- Timestamp → Date 포맷터 --------- */
 type FBTimestamp =
   | { seconds: number; nanoseconds: number } // Firestore JS SDK v9+
-  | { _seconds: number; _nanoseconds: number }; // v8 (웹 compat)
+  | { _seconds: number; _nanoseconds: number }; // v8 (웹 compat);
 
 const toDate = (ts: FBTimestamp): Date => {
   const s = "seconds" in ts ? ts.seconds : ts._seconds;
@@ -38,7 +45,7 @@ const formatDate = (d: Date) =>
 /* ------------------------------------------ */
 
 export default function QRScanScreen() {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
@@ -46,24 +53,30 @@ export default function QRScanScreen() {
   const [isWeb, setIsWeb] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanningRef = useRef<boolean>(false);
 
   useEffect(() => {
     setIsWeb(Platform.OS === 'web');
   }, []);
 
-  /* 카메라 권한 및 초기화 */
+  /* 웹 카메라 초기화 */
   useEffect(() => {
-    const initializeCamera = async () => {
-      if (isWeb) {
+    if (isWeb) {
+      const initializeWebCamera = async () => {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            } 
+          });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            setHasPermission(true);
+            scanningRef.current = true;
           }
         } catch (error) {
           console.error('웹 카메라 접근 실패:', error);
-          setHasPermission(false);
           Alert.alert(
             "카메라 권한 필요",
             "QR 코드를 스캔하기 위해서는 카메라 권한이 필요합니다.",
@@ -82,51 +95,26 @@ export default function QRScanScreen() {
             ]
           );
         }
-      } else {
-        try {
-          const { status } = await BarCodeScanner.requestPermissionsAsync();
-          setHasPermission(status === "granted");
-          
-          if (status !== "granted") {
-            Alert.alert(
-              "카메라 권한 필요",
-              "QR 코드를 스캔하기 위해서는 카메라 권한이 필요합니다.",
-              [
-                {
-                  text: "설정으로 이동",
-                  onPress: () => Linking.openSettings()
-                },
-                {
-                  text: "취소",
-                  style: "cancel",
-                  onPress: () => router.back()
-                }
-              ]
-            );
-          }
-        } catch (error) {
-          console.error('카메라 권한 요청 실패:', error);
-          showModal('카메라 권한을 확인하는데 실패했습니다.', 'error');
+      };
+
+      initializeWebCamera();
+
+      return () => {
+        scanningRef.current = false;
+        if (videoRef.current?.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach(track => track.stop());
         }
-      }
-    };
-
-    initializeCamera();
-
-    return () => {
-      if (isWeb && videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
+      };
+    }
   }, [isWeb]);
 
   /* 웹 QR 스캔 */
   useEffect(() => {
-    if (!isWeb || !hasPermission || scanned) return;
+    if (!isWeb || scanned || !jsQR) return;
 
     const scanQR = async () => {
-      if (!videoRef.current || !canvasRef.current) return;
+      if (!videoRef.current || !canvasRef.current || !scanningRef.current) return;
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -135,20 +123,28 @@ export default function QRScanScreen() {
       if (!context) return;
 
       const scan = () => {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (video.readyState === video.HAVE_ENOUGH_DATA && scanningRef.current && !scanned) {
           canvas.height = video.videoHeight;
           canvas.width = video.videoWidth;
           context.drawImage(video, 0, 0, canvas.width, canvas.height);
           
           try {
             const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-            // 여기에 QR 코드 디코딩 로직 추가
-            // 예: jsQR 라이브러리 사용
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "dontInvert",
+            });
+
+            if (code) {
+              console.log('웹에서 QR 코드 발견:', code.data);
+              handleBarCodeScanned({ data: code.data });
+              return; // 스캔 성공 시 더 이상 스캔하지 않음
+            }
           } catch (error) {
             console.error('QR 스캔 실패:', error);
           }
         }
-        if (!scanned) {
+        
+        if (scanningRef.current && !scanned) {
           requestAnimationFrame(scan);
         }
       };
@@ -156,13 +152,25 @@ export default function QRScanScreen() {
       scan();
     };
 
-    scanQR();
-  }, [isWeb, hasPermission, scanned]);
+    const startScanning = () => {
+      if (videoRef.current && videoRef.current.readyState >= 3) {
+        scanQR();
+      } else {
+        // 비디오가 로드될 때까지 대기
+        videoRef.current?.addEventListener('loadeddata', scanQR, { once: true });
+      }
+    };
 
-  /* 스캔 결과 */
+    startScanning();
+  }, [isWeb, scanned]);
+
+  /* 스캔 결과 처리 */
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (scanned) return;
+    
+    console.log('QR 코드 스캔됨:', data);
     setScanned(true);
+    scanningRef.current = false;
 
     try {
       const qrData = JSON.parse(data);
@@ -176,6 +184,7 @@ export default function QRScanScreen() {
         showModal('유효하지 않은 QR 코드입니다.', 'error');
         setTimeout(() => {
           setScanned(false);
+          scanningRef.current = true;
         }, 2000);
       }
     } catch (error) {
@@ -183,6 +192,7 @@ export default function QRScanScreen() {
       showModal('QR 코드를 인식할 수 없습니다.', 'error');
       setTimeout(() => {
         setScanned(false);
+        scanningRef.current = true;
       }, 2000);
     }
   };
@@ -195,12 +205,13 @@ export default function QRScanScreen() {
       setModalVisible(false);
       if (type === 'error') {
         setScanned(false);
+        scanningRef.current = true;
       }
     }, 2000);
   };
 
-  /* --------- UI 렌더 --------- */
-  if (hasPermission === null) {
+  /* 권한 확인 */
+  if (!permission) {
     return (
       <View style={styles.container}>
         <Text style={styles.text}>카메라 권한을 요청하는 중...</Text>
@@ -208,16 +219,47 @@ export default function QRScanScreen() {
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
         <Text style={styles.text}>카메라 접근 권한이 필요합니다</Text>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={requestPermission}
+        >
+          <Text style={styles.buttonText}>권한 요청</Text>
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.button} 
           onPress={() => router.back()}
         >
           <Text style={styles.buttonText}>뒤로 가기</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // 웹에서 jsQR이 없는 경우 알림
+  if (isWeb && !jsQR) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>QR 코드 스캔</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.centerContent}>
+          <Text style={styles.text}>웹에서 QR 스캔을 사용할 수 없습니다.</Text>
+          <Text style={styles.text}>모바일 앱을 사용해주세요.</Text>
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={() => router.back()}
+          >
+            <Text style={styles.buttonText}>뒤로 가기</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -240,6 +282,7 @@ export default function QRScanScreen() {
               style={styles.camera}
               autoPlay
               playsInline
+              muted
             />
             <canvas
               ref={canvasRef}
@@ -247,10 +290,13 @@ export default function QRScanScreen() {
             />
           </>
         ) : (
-          <Scanner
+          <CameraView
             style={styles.camera}
-            barCodeTypes={[BarCodeScanner.Constants.BarCodeType.qr]}
-            onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
+            facing="back"
+            barcodeScannerSettings={{
+              barcodeTypes: ["qr"],
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
           />
         )}
 
@@ -267,6 +313,17 @@ export default function QRScanScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.instruction}>QR 코드를 프레임 안에 위치시켜주세요</Text>
+          {scanned && (
+            <TouchableOpacity 
+              style={styles.button}
+              onPress={() => {
+                setScanned(false);
+                scanningRef.current = true;
+              }}
+            >
+              <Text style={styles.buttonText}>다시 스캔</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -294,6 +351,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   header: {
     flexDirection: "row",

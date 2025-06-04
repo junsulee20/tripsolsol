@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 
-// Naver Clova OCR API 설정
+// Naver Clova OCR API 설정 - 환경변수만 사용
 const CLOVA_OCR_CONFIG = {
-  secretKey: 'RUh3UkpReVVSeWVkTHRYS2pZbnFkdm11Tm5BYUtHTm8=',
-  apiUrl: 'https://suz0e9o2x4.apigw.ntruss.com/custom/v1/42611/34a389d790fc2bdd8458e5f1cde6933c97d11eeda65cf328b64460f0d68f04b5/infer'
+  secretKey: process.env.EXPO_PUBLIC_CLOVA_OCR_SECRET_KEY,
+  apiUrl: process.env.EXPO_PUBLIC_CLOVA_OCR_API_URL
 };
 
 export interface OCRResult {
@@ -176,6 +176,11 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     console.log('=== OCR Service Started ===');
     console.log('Input imageUri:', imageUri);
 
+    // API 설정 검증
+    if (!CLOVA_OCR_CONFIG.secretKey || !CLOVA_OCR_CONFIG.apiUrl) {
+      throw new Error('OCR API 설정이 올바르지 않습니다. 환경변수를 확인해주세요.');
+    }
+
     // 이미지를 Base64로 변환
     console.log('Converting image to Base64...');
     const base64Image = await imageToBase64(imageUri);
@@ -226,7 +231,23 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OCR API Error Response:', errorText);
-      throw new Error(`OCR API 오류: ${response.status} - ${errorText}`);
+      
+      // 특정 오류 코드에 대한 더 상세한 메시지
+      let errorMessage = `OCR API 오류: ${response.status}`;
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.code === '1021') {
+          errorMessage = 'OCR 템플릿이 배포되지 않았거나 올바르지 않습니다. 네이버 클라우드 플랫폼에서 OCR 서비스 설정을 확인해주세요.';
+        } else if (errorJson.message) {
+          errorMessage = `OCR API 오류: ${errorJson.message}`;
+        }
+      } catch (parseError) {
+        // JSON 파싱 실패 시 원본 텍스트 사용
+        errorMessage += ` - ${errorText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -295,16 +316,29 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     console.error('Error stack:', error.stack);
     console.error('Full error object:', error);
     
-    // 에러가 발생해도 기본값 반환
+    // 특정 오류에 대한 사용자 친화적 메시지
+    let userMessage = error.message;
+    
+    if (error.message.includes('1021') || error.message.includes('Deploy Info')) {
+      userMessage = 'OCR 서비스 설정에 문제가 있습니다. 관리자에게 문의하세요.';
+    } else if (error.message.includes('Network') || error.message.includes('fetch')) {
+      userMessage = '네트워크 연결을 확인하고 다시 시도해주세요.';
+    } else if (error.message.includes('이미지')) {
+      userMessage = '이미지 처리 중 오류가 발생했습니다. 다른 이미지로 시도해주세요.';
+    }
+    
+    // 에러 발생 시에도 사용자가 수동으로 입력할 수 있도록 기본값 반환
     const fallbackResult: OCRResult = {
       amount: undefined,
       description: '영수증',
-      rawText: `OCR 처리 중 오류 발생: ${error.message}`,
+      rawText: `OCR 처리 실패: ${userMessage}`,
       confidence: 0
     };
     
     console.log('Returning fallback result:', fallbackResult);
-    return fallbackResult;
+    
+    // 실제로는 오류를 throw하여 사용자에게 알리고 수동 입력 옵션 제공
+    throw new Error(userMessage);
   }
 };
 
