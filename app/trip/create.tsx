@@ -27,6 +27,11 @@ const showAlert = (title: string, message: string) => {
   }
 };
 
+// 회원번호 생성 함수 (Firebase ID의 맨 뒷 6자리)
+const generateMemberNumber = (userId: string): string => {
+  return userId.slice(-6).toUpperCase();
+};
+
 export default function CreateTripScreen() {
   const [tripName, setTripName] = useState('');
   const [emoji, setEmoji] = useState('');
@@ -237,7 +242,7 @@ export default function CreateTripScreen() {
         </View>
         <View>
           <Text style={styles.participantName}>{item.name}</Text>
-          <Text style={styles.participantEmail}>{item.email}</Text>
+          <Text style={styles.participantEmail}>회원번호: {generateMemberNumber(item.id)}</Text>
         </View>
       </View>
       <TouchableOpacity
@@ -261,7 +266,7 @@ export default function CreateTripScreen() {
       </View>
       <View style={styles.searchResultInfo}>
         <Text style={styles.participantName}>{item.name}</Text>
-        <Text style={styles.participantEmail}>{item.email}</Text>
+        <Text style={styles.participantEmail}>회원번호: {generateMemberNumber(item.id)}</Text>
       </View>
       <Ionicons name="add-circle" size={24} color="#4A90E2" />
     </TouchableOpacity>

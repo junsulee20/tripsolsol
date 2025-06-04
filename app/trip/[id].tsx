@@ -13,7 +13,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
-import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser } from '../../services/firebaseService';
+import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser, deleteExpense } from '../../services/firebaseService';
 import { convertToKRW } from '../../services/exchangeService';
 import { Trip, User, Expense, ExpenseSplit } from '../../types';
 
@@ -28,6 +28,15 @@ export default function TripDetailScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // 환율 변환된 지출 데이터
   const [convertedExpenses, setConvertedExpenses] = useState<{ [expenseId: string]: number }>({});
+  
+  // Custom modal states
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customModalMessage, setCustomModalMessage] = useState('');
+  const [customModalType, setCustomModalType] = useState<'success' | 'error'>('success');
+  
+  // Delete confirmation states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingExpense, setIsDeletingExpense] = useState(false);
   
   useEffect(() => {
     const fetchTripData = async () => {
@@ -231,37 +240,70 @@ export default function TripDetailScreen() {
     setModalVisible(true);
   };
 
+  const showCustomModal = (message: string, type: 'success' | 'error') => {
+    setCustomModalMessage(message);
+    setCustomModalType(type);
+    setCustomModalVisible(true);
+    setTimeout(() => setCustomModalVisible(false), 2000);
+  };
+
   const handleEditExpense = () => {
     setModalVisible(false);
-    router.push(`/expense/detail?tripId=${id}&expenseId=${selectedExpense.id}`);
+    router.push({
+      pathname: "/expense/edit" as any,
+      params: { 
+        tripId: id as string, 
+        expenseId: selectedExpense.id 
+      }
+    });
   };
 
   const handleDeleteExpense = () => {
     setModalVisible(false);
-    Alert.alert(
-      '삭제',
-      '이 지출을 삭제하시겠습니까?',
-      [
-        { text: '취소', style: 'cancel' },
-        { 
-          text: '삭제', 
-          style: 'destructive', 
-          onPress: async () => {
-            try {
-              // TODO: Firebase에서 실제 삭제 구현
-              // await deleteExpense(selectedExpense.id);
-              
-              // 임시로 로컬 상태에서 제거
-              setExpenses(prev => prev.filter(exp => exp.id !== selectedExpense.id));
-              Alert.alert('삭제됨', '지출이 삭제되었습니다.');
-              setSelectedExpense(null);
-            } catch (error) {
-              Alert.alert('오류', '지출 삭제에 실패했습니다.');
-            }
-          }
-        }
-      ]
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteExpense = async () => {
+    setShowDeleteConfirm(false);
+    setIsDeletingExpense(true);
+    
+    try {
+      console.log('지출 삭제 시작...', selectedExpense.id);
+      
+      if (!selectedExpense || !selectedExpense.id) {
+        throw new Error('삭제할 지출 정보를 찾을 수 없습니다.');
+      }
+
+      console.log('Firebase에서 지출 삭제 중...');
+      // Firebase에서 실제 삭제 구현
+      await deleteExpense(selectedExpense.id);
+      console.log('Firebase 지출 삭제 완료');
+      
+      // 로컬 상태에서도 제거
+      setExpenses(prev => prev.filter(exp => exp.id !== selectedExpense.id));
+      
+      showCustomModal('지출이 성공적으로 삭제되었습니다.', 'success');
+      setSelectedExpense(null);
+      
+    } catch (error: any) {
+      console.error('지출 삭제 오류:', error);
+      console.error('오류 코드:', error.code);
+      console.error('오류 메시지:', error.message);
+      
+      let errorMessage = '지출 삭제에 실패했습니다.';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage = '지출을 삭제할 권한이 없습니다.';
+      } else if (error.code === 'not-found') {
+        errorMessage = '삭제할 지출을 찾을 수 없습니다.';
+      } else if (error.code === 'network-request-failed') {
+        errorMessage = '네트워크 오류가 발생했습니다. 다시 시도해주세요.';
+      }
+      
+      showCustomModal(errorMessage, 'error');
+    } finally {
+      setIsDeletingExpense(false);
+    }
   };
 
   const renderExpenseItem = (expense: Expense) => {
@@ -508,6 +550,78 @@ export default function TripDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Custom Modal for Success/Error Messages */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={customModalVisible}
+        onRequestClose={() => setCustomModalVisible(false)}
+      >
+        <View style={styles.customModalOverlay}>
+          <View style={[
+            styles.customModalContent,
+            customModalType === 'success' ? styles.successModal : styles.errorModal
+          ]}>
+            <Ionicons 
+              name={customModalType === 'success' ? 'checkmark-circle' : 'alert-circle'} 
+              size={24} 
+              color={customModalType === 'success' ? '#4CAF50' : '#FF6B6B'} 
+            />
+            <Text style={[
+              styles.customModalText,
+              { color: customModalType === 'success' ? '#4CAF50' : '#FF6B6B' }
+            ]}>
+              {customModalMessage}
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showDeleteConfirm}
+        onRequestClose={() => setShowDeleteConfirm(false)}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <Ionicons name="warning" size={32} color="#FF6B6B" />
+              <Text style={styles.deleteModalTitle}>지출 삭제</Text>
+            </View>
+            
+            <Text style={styles.deleteModalMessage}>
+              이 지출을 삭제하시겠습니까?{'\n'}
+              삭제된 지출은 복구할 수 없습니다.
+            </Text>
+            
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity 
+                style={[styles.deleteModalButton, styles.cancelButton]}
+                onPress={() => setShowDeleteConfirm(false)}
+                disabled={isDeletingExpense}
+              >
+                <Text style={styles.cancelButtonText}>취소</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.deleteModalButton, styles.confirmDeleteButton]}
+                onPress={confirmDeleteExpense}
+                disabled={isDeletingExpense}
+              >
+                {isDeletingExpense ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.confirmDeleteButtonText}>삭제</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </TabLayout>
   );
 }
@@ -911,6 +1025,88 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
     zIndex: 1000,
+  },
+  customModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    marginHorizontal: 40,
+    minWidth: 200,
+  },
+  customModalText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 12,
+  },
+  successModal: {
+    backgroundColor: '#E3F2FD',
+  },
+  errorModal: {
+    backgroundColor: '#FFEBEE',
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginHorizontal: 40,
+    minWidth: 280,
+  },
+  deleteModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FF6B6B',
+    marginLeft: 8,
+  },
+  deleteModalMessage: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteModalButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#FFEBEE',
+  },
+  cancelButton: {
+    backgroundColor: '#E3F2FD',
+  },
+  confirmDeleteButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B6B',
+  },
+  confirmDeleteButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
   },
 }); 
  
