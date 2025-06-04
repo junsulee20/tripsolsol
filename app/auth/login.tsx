@@ -8,12 +8,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  Image
 } from 'react-native';
 import { router } from 'expo-router';
 
 import { signIn, onAuthStateChange, getCurrentUser } from '../../services/firebaseService';
-import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -67,9 +67,11 @@ export default function LoginScreen() {
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <View style={styles.logo}>
-              <View style={styles.logoIcon}>
-                <Ionicons name="people" size={24} color="white" />
-              </View>
+              <Image 
+                source={require('../../assets/images/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
           </View>
           <Text style={styles.title}>트립솔솔</Text>
@@ -145,18 +147,13 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 16,
-    backgroundColor: '#E5E5E5',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
   },
-  logoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
   },
   title: {
     fontSize: 24,
