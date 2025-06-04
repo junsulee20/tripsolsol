@@ -22,7 +22,7 @@ export default function TabBar({ style }: TabBarProps) {
       name: 'expense',
       title: '비용 추가',
       icon: 'add-circle',
-      route: '/expense/add',
+      route: '/expense',
       isActive: pathname.startsWith('/expense')
     },
     {

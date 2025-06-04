@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Modal
 } from 'react-native';
+import RNDateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
@@ -52,6 +53,24 @@ interface MemberAmount {
   percentage: number;
 }
 
+// Helper function to format currency
+const formatDisplayAmount = (amount: number | string, currencyCode: string): string => {
+  const num = typeof amount === 'string' ? parseFloat(amount.replace(/,/g, '')) : amount;
+  if (isNaN(num)) return '0';
+
+  if (currencyCode === 'KRW') {
+    return num.toLocaleString('ko-KR'); // KRW: no decimals, with commas
+  } else {
+    // Other currencies: 2 decimal places, with commas
+    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
+  }
+};
+
+// Helper function to parse a formatted amount string back to a number string (without commas)
+const parseDisplayAmount = (formattedAmount: string): string => {
+  return formattedAmount.replace(/,/g, '');
+};
+
 export default function ExpenseDetailScreen() {
   const { tripId, tripName, ocrAmount, ocrDescription } = useLocalSearchParams();
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -62,14 +81,17 @@ export default function ExpenseDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Form states
   const [description, setDescription] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
+  const [displayTotalAmount, setDisplayTotalAmount] = useState('0');
   const [currency, setCurrency] = useState('USD');
   const [paidBy, setPaidBy] = useState('');
   const [splitMethod, setSplitMethod] = useState('equal');
   const [memo, setMemo] = useState('');
+  const [expenseDate, setExpenseDate] = useState(new Date());
 
   useEffect(() => {
     initializeData();
@@ -179,54 +201,71 @@ export default function ExpenseDetailScreen() {
     });
   };
 
-  const handleAmountChange = (amount: string) => {
-    setTotalAmount(amount);
-    if (splitMethod === 'equal' && amount) {
-      const numAmount = parseFloat(amount) || 0;
-      const perPersonAmount = numAmount / memberAmounts.length;
-      setMemberAmounts(memberAmounts.map(member => ({
-        ...member,
-        amount: perPersonAmount,
-        percentage: Math.round(100 / memberAmounts.length)
-      })));
+  const handleAmountChange = (text: string) => {
+    const rawValue = parseDisplayAmount(text);
+    if (/^\d*\.?\d*$/.test(rawValue) || rawValue === '') { // Allow numbers and a single decimal point
+      setTotalAmount(rawValue); // Store raw number string
+      const numValue = parseFloat(rawValue);
+      setDisplayTotalAmount(isNaN(numValue) ? (rawValue === '.' ? '0.' : '') : formatDisplayAmount(numValue, currency));
+      
+      // Update member amounts if split method is equal
+      if (splitMethod === 'equal' && rawValue) {
+        const numAmount = parseFloat(rawValue) || 0;
+        const memberCount = memberAmounts.length > 0 ? memberAmounts.length : 1;
+        const perPersonAmount = numAmount / memberCount;
+        setMemberAmounts(memberAmounts.map(member => ({
+          ...member,
+          amount: perPersonAmount,
+          percentage: Math.round(100 / memberCount)
+        })));
+      }
     }
   };
 
   const handleSplitMethodChange = (method: string) => {
     setSplitMethod(method);
-    const numAmount = parseFloat(totalAmount) || 0;
-    
+    const numAmount = parseFloat(totalAmount) || 0; // Use raw totalAmount for calculation
+    const memberCount = memberAmounts.length > 0 ? memberAmounts.length : 1;
+
     if (method === 'equal') {
-      const perPersonAmount = numAmount / memberAmounts.length;
+      const perPersonAmount = numAmount / memberCount;
       setMemberAmounts(memberAmounts.map(member => ({
         ...member,
         amount: perPersonAmount,
-        percentage: Math.round(100 / memberAmounts.length)
+        percentage: Math.round(100 / memberCount)
       })));
     }
+    // For other methods, amounts might be manually set or calculated differently
   };
 
-  const handleMemberAmountChange = (userId: string, amount: string) => {
-    const numAmount = parseFloat(amount) || 0;
-    const totalAmountNum = parseFloat(totalAmount) || 0;
+  const handleMemberAmountChange = (userId: string, textAmount: string) => {
+    const rawAmount = parseDisplayAmount(textAmount);
+    const numAmount = parseFloat(rawAmount) || 0;
+    const totalAmountNum = parseFloat(totalAmount) || 0; // Use raw totalAmount
     const percentage = totalAmountNum > 0 ? (numAmount / totalAmountNum) * 100 : 0;
     
     setMemberAmounts(memberAmounts.map(member => 
       member.userId === userId 
-        ? { ...member, amount: numAmount, percentage }
+        ? { ...member, amount: numAmount, percentage } // Store raw amount
         : member
     ));
   };
 
   const handleMemberPercentageChange = (userId: string, percentage: number) => {
-    const totalAmountNum = parseFloat(totalAmount) || 0;
+    const totalAmountNum = parseFloat(totalAmount) || 0; // Use raw totalAmount
     const amount = (totalAmountNum * percentage) / 100;
     setMemberAmounts(memberAmounts.map(member => 
       member.userId === userId 
-        ? { ...member, percentage, amount }
+        ? { ...member, percentage, amount } // Store raw amount
         : member
     ));
   };
+
+  useEffect(() => {
+    // Update displayTotalAmount when currency changes
+    const numValue = parseFloat(totalAmount);
+    setDisplayTotalAmount(isNaN(numValue) ? (totalAmount === '.' ? '0.' : '0') : formatDisplayAmount(numValue, currency));
+  }, [currency, totalAmount]); // Add totalAmount here to reformat if it changes programmatically
 
   const validateForm = (): boolean => {
     if (!description.trim()) {
@@ -267,12 +306,10 @@ export default function ExpenseDetailScreen() {
         return;
       }
 
-      // splitBetween: 분할에 참여하는 사용자 IDs
       const splitBetween = memberAmounts
         .filter(member => member.amount > 0)
         .map(member => member.userId);
 
-      // splitDetails: 각 멤버별 상세 분할 정보
       const splitDetails = memberAmounts
         .filter(member => member.amount > 0)
         .map(member => ({
@@ -289,26 +326,16 @@ export default function ExpenseDetailScreen() {
         currency,
         paidBy,
         splitBetween,
-        splitDetails, // 각 멤버별 상세 정보
-        splitMethod, // 분할 방법
+        splitDetails,
+        splitMethod,
         category: ExpenseCategory.OTHER,
-        date: new Date(),
+        date: expenseDate,
         createdAt: new Date(),
       };
 
-      console.log('Saving expense with detailed split information:', {
-        ...expenseData,
-        splitDetails: expenseData.splitDetails
-      });
-
       await addExpense(expenseData);
-      
-      console.log('Successfully saved expense, navigating to trip:', trip.id);
-      
-      // 모든 스택을 정리하고 trip 페이지로 이동
       router.replace(`/trip/${trip.id}`);
     } catch (error: any) {
-      console.error('Error saving expense:', error);
       Alert.alert('오류', '지출 추가에 실패했습니다: ' + error.message);
     } finally {
       setSaving(false);
@@ -334,9 +361,9 @@ export default function ExpenseDetailScreen() {
         {splitMethod === 'custom' && (
           <TextInput
             style={styles.memberAmountInput}
-            value={member.amount > 0 ? member.amount.toFixed(2) : ''}
+            value={formatDisplayAmount(member.amount, currency)}
             onChangeText={(value) => handleMemberAmountChange(member.userId, value)}
-            placeholder="0.00"
+            placeholder={formatDisplayAmount(0, currency)}
             keyboardType="numeric"
           />
         )}
@@ -355,7 +382,7 @@ export default function ExpenseDetailScreen() {
         )}
         
         <Text style={styles.memberAmountText}>
-          {currency} {member.amount.toFixed(2)}
+          {getCurrencyInfo(currency).symbol} {formatDisplayAmount(member.amount, currency)}
         </Text>
       </View>
     </View>
@@ -416,6 +443,34 @@ export default function ExpenseDetailScreen() {
       </ScrollView>
     </View>
   );
+
+  // Date formatting function
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short'
+    });
+  };
+
+  // DateTimePicker onChange handler
+  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    const { type } = event;
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false); // Always close for Android after any interaction
+    }
+    if (type === 'set') { // Date was selected
+      if (selectedDate) {
+        setExpenseDate(selectedDate);
+      }
+      if (Platform.OS === 'ios') {
+        setShowDatePicker(false); // Close for iOS only if a date was set
+      }
+    } else if (type === 'dismissed' && Platform.OS === 'ios') {
+        setShowDatePicker(false); // Close for iOS if dismissed
+    }
+  };
 
   if (loading) {
     return (
@@ -482,6 +537,30 @@ export default function ExpenseDetailScreen() {
             </View>
           </View>
 
+          {/* 1.5. 날짜 선택 섹션 */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>언제 지출했나요?</Text>
+            <TouchableOpacity
+              style={styles.dateSelector}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <View style={styles.dateSelectorContent}>
+                <Ionicons name="calendar" size={20} color="#4A90E2" />
+                <Text style={styles.dateText}>{formatDate(expenseDate)}</Text>
+                <Ionicons name="chevron-down" size={16} color="#666" />
+              </View>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <RNDateTimePicker
+                testID="dateTimePicker"
+                value={expenseDate}
+                mode="date"
+                display="default"
+                onChange={onDateChange}
+              />
+            )}
+          </View>
+
           {/* 2. 금액 입력 섹션 */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>금액을 입력해주세요</Text>
@@ -496,9 +575,9 @@ export default function ExpenseDetailScreen() {
                 </TouchableOpacity>
                 <TextInput
                   style={styles.amountInput}
-                  value={totalAmount}
+                  value={displayTotalAmount}
                   onChangeText={handleAmountChange}
-                  placeholder="0.00"
+                  placeholder={formatDisplayAmount(0, currency)}
                   keyboardType="numeric"
                 />
                 <TouchableOpacity 
@@ -535,7 +614,7 @@ export default function ExpenseDetailScreen() {
                 
                 <View style={styles.totalSummary}>
                   <Text style={styles.totalSummaryText}>
-                    총합: {currency} {memberAmounts.reduce((sum, member) => sum + member.amount, 0).toFixed(2)}
+                    총합: {getCurrencyInfo(currency).symbol} {formatDisplayAmount(memberAmounts.reduce((sum, m) => sum + m.amount, 0), currency)}
                   </Text>
                 </View>
               </View>
@@ -1152,5 +1231,22 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  dateSelector: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 12,
+  },
+  dateSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dateText: {
+    marginLeft: 8,
+    marginRight: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
 }); 
