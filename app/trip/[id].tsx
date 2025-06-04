@@ -360,6 +360,14 @@ export default function TripDetailScreen() {
         </View>
       </ScrollView>
 
+      {/* 플로팅 액션 버튼 - 지출 추가 */}
+      <TouchableOpacity 
+        style={styles.floatingActionButton}
+        onPress={() => router.push(`/expense/detail?tripId=${id}&tripName=${trip?.name || ''}`)}
+      >
+        <Ionicons name="add" size={24} color="white" />
+      </TouchableOpacity>
+
       <Modal
         animationType="slide"
         transparent={true}
@@ -836,6 +844,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  floatingActionButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    zIndex: 1000,
   },
 }); 
  
