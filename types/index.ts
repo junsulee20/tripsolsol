@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   profileImage?: string;
+  photoURL?: string;
   bankAccount?: string;
   createdAt: Date;
 }
@@ -75,4 +76,23 @@ export interface TripSummary {
   totalExpenses: number;
   balances: Balance[];
   settlements: Settlement[];
+}
+
+export interface ExchangeRate {
+  cur_unit: string;
+  cur_nm: string;
+  kftc_deal_bas_r: string;
+  ttb: string;
+  tts: string;
+  deal_bas_r: string;
+}
+
+export interface ExchangeRateResponse {
+  result: number;
+  cur_unit: string;
+  cur_nm: string;
+  kftc_deal_bas_r: string;
+  ttb: string;
+  tts: string;
+  deal_bas_r: string;
 } 

@@ -27,7 +27,7 @@ export default function TabLayout() {
         options={{
           title: '여행',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="doc.fill" color={color} />,
-          headerShown: true,
+          headerShown: false,
         }}
       />
       <Tabs.Screen

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { updatePassword, updateProfile } from 'firebase/auth';
-import { doc, updateDoc } from 'firebase/firestore';
+import { updatePassword, updateProfile, deleteUser } from 'firebase/auth';
+import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,10 +12,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Alert,
+  Linking
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { auth, db } from '../../config/firebase';
+import { getExchangeRates, MAJOR_CURRENCIES, getTodayString, testExchangeAPI } from '../../services/exchangeService';
+import { ExchangeRateResponse } from '../../types';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -46,6 +50,15 @@ export default function SettingsScreen() {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [showCharacterPicker, setShowCharacterPicker] = useState(false);
+  
+  // 환율 정보 state
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateResponse[]>([]);
+  const [loadingExchange, setLoadingExchange] = useState(false);
+  const [exchangeDate, setExchangeDate] = useState<string>('');
+  
+  // 계정 삭제 관련 state
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (auth.currentUser) {
@@ -53,6 +66,9 @@ export default function SettingsScreen() {
       // photoURL에 키값(bear, dino 등) 저장
       setSelectedCharacter(auth.currentUser.photoURL || null);
     }
+    
+    // 환율 정보 로드
+    loadExchangeRates();
   }, []);
 
   const showModal = (message: string, type: 'success' | 'error') => {
@@ -179,6 +195,116 @@ export default function SettingsScreen() {
     }
   };
 
+  // 환율 정보 로드
+  const loadExchangeRates = async () => {
+    setLoadingExchange(true);
+    try {
+      const rates = await getExchangeRates();
+      // 주요 통화만 필터링
+      const majorRates = rates.filter(rate => 
+        MAJOR_CURRENCIES.some(currency => rate.cur_unit.includes(currency))
+      );
+      setExchangeRates(majorRates);
+      
+      // 현재 날짜를 기본값으로 설정
+      const today = getTodayString();
+      const formattedDate = today.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3');
+      setExchangeDate(formattedDate);
+    } catch (error) {
+      console.error('Error loading exchange rates:', error);
+      showModal('환율 정보를 불러오는데 실패했습니다.', 'error');
+    } finally {
+      setLoadingExchange(false);
+    }
+  };
+
+  // API 연결 테스트
+  const handleAPITest = async () => {
+    setLoadingExchange(true);
+    try {
+      const result = await testExchangeAPI();
+      console.log('API 테스트 결과:', result);
+      showModal(result.message, result.success ? 'success' : 'error');
+    } catch (error) {
+      console.error('API 테스트 오류:', error);
+      showModal('API 테스트 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setLoadingExchange(false);
+    }
+  };
+
+  // 계정 삭제 함수 (커스텀 모달 사용)
+  const handleDeleteAccount = async () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    setShowDeleteConfirm(false);
+    setIsDeletingAccount(true);
+    
+    try {
+      console.log('계정 삭제 시작...');
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('사용자 정보를 찾을 수 없습니다.');
+      }
+
+      console.log('사용자 UID:', user.uid);
+
+      // 1. Firestore에서 사용자 문서 삭제
+      console.log('Firestore 문서 삭제 중...');
+      const userRef = doc(db, 'users', user.uid);
+      await deleteDoc(userRef);
+      console.log('Firestore 문서 삭제 완료');
+
+      // 2. Firebase Auth에서 사용자 계정 삭제
+      console.log('Firebase Auth 계정 삭제 중...');
+      await deleteUser(user);
+      console.log('Firebase Auth 계정 삭제 완료');
+
+      // 3. 성공 메시지 표시 후 로그인 화면으로 이동
+      showModal('계정이 성공적으로 삭제되었습니다.', 'success');
+      
+      setTimeout(() => {
+        router.replace('/');
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('계정 삭제 오류:', error);
+      console.error('오류 코드:', error.code);
+      console.error('오류 메시지:', error.message);
+      
+      let errorMessage = '계정 삭제에 실패했습니다.';
+      
+      if (error.code === 'auth/requires-recent-login') {
+        errorMessage = '보안을 위해 다시 로그인 후 시도해주세요.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = '네트워크 오류가 발생했습니다. 다시 시도해주세요.';
+      }
+      
+      showModal(errorMessage, 'error');
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  // 이용약관 링크 열기
+  const openTermsOfService = async () => {
+    try {
+      const url = 'https://v0-trip-sol-sol-terms.vercel.app/';
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        showModal('링크를 열 수 없습니다.', 'error');
+      }
+    } catch (error) {
+      console.error('링크 열기 오류:', error);
+      showModal('링크를 열 수 없습니다.', 'error');
+    }
+  };
+
   return (
     <TabLayout>
       <View style={styles.header}>
@@ -266,6 +392,63 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.menuText}>정산 내역</Text>
           </TouchableOpacity>
+          
+          {/* 환율 정보 박스 */}
+          <View style={styles.exchangeRateContainer}>
+            <View style={styles.exchangeRateHeader}>
+              <View style={styles.exchangeRateIcon}>
+                <Ionicons name="cash-outline" size={20} color="#333" />
+              </View>
+              <Text style={styles.exchangeRateTitle}>오늘의 환율 정보</Text>
+              <TouchableOpacity onPress={loadExchangeRates} disabled={loadingExchange} style={styles.refreshButton}>
+                <Ionicons 
+                  name="refresh-outline" 
+                  size={16} 
+                  color={loadingExchange ? "#999" : "#4A90E2"} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleAPITest} disabled={loadingExchange} style={styles.testButton}>
+                <Ionicons 
+                  name="bug-outline" 
+                  size={16} 
+                  color={loadingExchange ? "#999" : "#FF6B6B"} 
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.exchangeRateDate}>{exchangeDate} 기준</Text>
+            
+            {loadingExchange ? (
+              <View style={styles.exchangeRateLoading}>
+                <ActivityIndicator size="small" color="#4A90E2" />
+                <Text style={styles.exchangeRateLoadingText}>환율 정보 로딩 중...</Text>
+              </View>
+            ) : exchangeRates.length > 0 ? (
+              <View style={styles.exchangeRateList}>
+                {exchangeRates.slice(0, 8).map((rate, index) => (
+                  <View key={index} style={styles.exchangeRateItem}>
+                    <View style={styles.currencyInfo}>
+                      <Text style={styles.exchangeRateCurrency}>{rate.cur_unit}</Text>
+                      <Text style={styles.exchangeRateName}>{rate.cur_nm}</Text>
+                    </View>
+                    <View style={styles.rateInfo}>
+                      <Text style={styles.exchangeRateLabel}>매매기준율</Text>
+                      <Text style={styles.exchangeRateValue}>
+                        {parseFloat(rate.kftc_deal_bas_r.replace(/,/g, '')).toLocaleString()} 원
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.exchangeRateErrorContainer}>
+                <Text style={styles.exchangeRateError}>환율 정보를 불러올 수 없습니다.</Text>
+                <TouchableOpacity onPress={handleAPITest} style={styles.testButtonLarge}>
+                  <Text style={styles.testButtonText}>API 연결 테스트</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/qr/scan')}>
             <View style={styles.menuIcon}>
               <Ionicons name="qr-code-outline" size={20} color="#333" />
@@ -280,11 +463,33 @@ export default function SettingsScreen() {
             <Text style={styles.menuText}>QR 코드 생성</Text>
           </TouchableOpacity>
 
+          {/* 이용약관 메뉴 */}
+          <TouchableOpacity style={styles.menuItem} onPress={openTermsOfService}>
+            <View style={styles.menuIcon}>
+              <Ionicons name="document-text-outline" size={20} color="#333" />
+            </View>
+            <Text style={styles.menuText}>이용약관</Text>
+            <Ionicons name="open-outline" size={16} color="#666" style={styles.externalLinkIcon} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.menuItem} onPress={handlePasswordChange}>
             <View style={styles.menuIcon}>
               <Ionicons name="lock-closed-outline" size={20} color="#333" />
             </View>
             <Text style={styles.menuText}>비밀번호 변경</Text>
+          </TouchableOpacity>
+
+          {/* 계정 삭제 메뉴 */}
+          <TouchableOpacity 
+            style={[styles.menuItem, styles.deleteMenuItem]} 
+            onPress={handleDeleteAccount}
+            disabled={isDeletingAccount}
+          >
+            <View style={styles.menuIcon}>
+              <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+            </View>
+            <Text style={[styles.menuText, styles.deleteMenuText]}>계정 삭제</Text>
+            {isDeletingAccount && <ActivityIndicator size="small" color="#FF3B30" />}
           </TouchableOpacity>
 
           {showPasswordChange && (
@@ -407,6 +612,38 @@ export default function SettingsScreen() {
             <TouchableOpacity onPress={() => setShowCharacterPicker(false)} style={styles.closeButton}>
               <Text style={styles.closeButtonText}>닫기</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 계정 삭제 확인 모달 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showDeleteConfirm}
+        onRequestClose={() => setShowDeleteConfirm(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.deleteConfirmModal}>
+            <Text style={styles.deleteConfirmTitle}>계정 삭제</Text>
+            <Text style={styles.deleteConfirmMessage}>
+              정말로 계정을 삭제하시겠습니까?{'\n'}
+              이 작업은 되돌릴 수 없으며, 모든 데이터가 영구적으로 삭제됩니다.
+            </Text>
+            <View style={styles.deleteConfirmButtons}>
+              <TouchableOpacity
+                style={styles.deleteConfirmCancelButton}
+                onPress={() => setShowDeleteConfirm(false)}
+              >
+                <Text style={styles.deleteConfirmCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteConfirmDeleteButton}
+                onPress={confirmDeleteAccount}
+              >
+                <Text style={styles.deleteConfirmDeleteText}>삭제</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -729,5 +966,208 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  exchangeRateContainer: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  exchangeRateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  exchangeRateIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  exchangeRateTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  exchangeRateDate: {
+    fontSize: 12,
+    color: '#666',
+  },
+  exchangeRateLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  exchangeRateLoadingText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  exchangeRateList: {
+    marginTop: 16,
+  },
+  exchangeRateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  currencyInfo: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  exchangeRateCurrency: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  exchangeRateName: {
+    fontSize: 13,
+    color: '#666',
+  },
+  rateInfo: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
+  exchangeRateLabel: {
+    fontSize: 11,
+    color: '#999',
+    marginBottom: 2,
+  },
+  exchangeRateValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  exchangeRateErrorContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exchangeRateError: {
+    fontSize: 12,
+    color: '#FF3B30',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  testButton: {
+    padding: 8,
+  },
+  testButtonText: {
+    color: '#4A90E2',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  testButtonLarge: {
+    padding: 12,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  externalLinkIcon: {
+    marginLeft: 8,
+  },
+  deleteMenuItem: {
+    borderWidth: 1,
+    borderColor: '#FFE5E5',
+    backgroundColor: '#FFF9F9',
+  },
+  deleteMenuText: {
+    color: '#FF3B30',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+    alignSelf: 'center',
+    minWidth: 120,
+  },
+  deleteAccountButtonDisabled: {
+    opacity: 0.7,
+  },
+  deleteAccountButtonText: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  deleteAccountIcon: {
+    marginRight: 4,
+  },
+  deleteConfirmModal: {
+    backgroundColor: 'white',
+    margin: 20,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  deleteConfirmTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  deleteConfirmMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  deleteConfirmButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deleteConfirmCancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  deleteConfirmCancelText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  deleteConfirmDeleteButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: '#FF3B30',
+  },
+  deleteConfirmDeleteText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: 'white',
   },
 }); 

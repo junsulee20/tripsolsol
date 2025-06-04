@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Modal
+  Modal,
+  Linking
 } from 'react-native';
 import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
@@ -31,6 +32,9 @@ export default function SignUpScreen() {
   const [modalMessage, setModalMessage] = useState('');
   const [modalButtons, setModalButtons] = useState<Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'primary'}>>([]);
 
+  // 개인정보 처리방침 모달 상태
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+
   // 커스텀 모달 표시 함수
   const showCustomModal = (title: string, message: string, buttons: Array<{text: string, onPress: () => void, style?: 'default' | 'cancel' | 'primary'}>) => {
     setModalTitle(title);
@@ -42,6 +46,37 @@ export default function SignUpScreen() {
   // 커스텀 모달 닫기
   const hideModal = () => {
     setModalVisible(false);
+  };
+
+  // 개인정보 처리방침 모달 열기
+  const showPrivacyModal = () => {
+    setPrivacyModalVisible(true);
+  };
+
+  // 개인정보 처리방침 모달 닫기
+  const hidePrivacyModal = () => {
+    setPrivacyModalVisible(false);
+  };
+
+  // 개인정보 처리방침 전문 링크 열기
+  const openPrivacyPolicy = async () => {
+    try {
+      const url = 'https://v0-trip-sol-sol-terms.vercel.app/';
+      const supported = await Linking.canOpenURL(url);
+      
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        showCustomModal('오류', '링크를 열 수 없습니다.', [
+          { text: '확인', onPress: hideModal }
+        ]);
+      }
+    } catch (error) {
+      console.error('링크 열기 오류:', error);
+      showCustomModal('오류', '링크를 열 수 없습니다.', [
+        { text: '확인', onPress: hideModal }
+      ]);
+    }
   };
 
   const handleSignUp = async () => {
@@ -220,13 +255,15 @@ export default function SignUpScreen() {
           <View style={styles.checkboxContainer}>
             <TouchableOpacity
               style={styles.checkbox}
-              onPress={() => setAgreeTerms(!agreeTerms)}
+              onPress={showPrivacyModal}
             >
               {agreeTerms && <Ionicons name="checkmark" size={16} color="#4A90E2" />}
             </TouchableOpacity>
-            <Text style={styles.checkboxText}>
-              이용약관과 개인정보 처리방침에 동의합니다
-            </Text>
+            <TouchableOpacity onPress={showPrivacyModal} style={styles.checkboxTextContainer}>
+              <Text style={styles.checkboxText}>
+                이용약관과 개인정보 처리방침에 동의합니다
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
@@ -240,6 +277,77 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* 개인정보 처리방침 모달 */}
+      <Modal
+        visible={privacyModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={hidePrivacyModal}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.privacyModalContent}>
+            <View style={styles.privacyModalHeader}>
+              <Text style={styles.privacyModalTitle}>개인정보 처리방침</Text>
+              <TouchableOpacity onPress={hidePrivacyModal} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.privacyModalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.privacyText}>
+                tripsolsol은 사용자의 개인정보 보호를 위해 다음과 같이 처리방침을 운영합니다.
+              </Text>
+              
+              <Text style={styles.privacySectionTitle}>1. 수집 항목 및 방법</Text>
+              <Text style={styles.privacyText}>
+                이메일, 닉네임, 접속 로그, 기기 정보 등을 회원가입 및 앱 사용 과정에서 수집합니다.
+              </Text>
+              
+              <Text style={styles.privacySectionTitle}>2. 이용 목적</Text>
+              <Text style={styles.privacyText}>
+                서비스 제공, 여행 정산 내역 저장, 고객 지원, 서비스 개선 및 분석에 활용됩니다.
+              </Text>
+              
+              <Text style={styles.privacySectionTitle}>3. 보유 및 삭제</Text>
+              <Text style={styles.privacyText}>
+                개인정보는 탈퇴 시 또는 목적 달성 후 즉시 삭제되며, 법령에 따라 보존이 필요한 경우 예외적으로 보관될 수 있습니다.
+              </Text>
+              
+              <Text style={styles.privacySectionTitle}>4. 제3자 제공 및 위탁</Text>
+              <Text style={styles.privacyText}>
+                원칙적으로 동의 없이 외부에 제공하지 않으며, 서버 운영 등 일부 업무는 사전 동의 후 위탁할 수 있습니다.
+              </Text>
+              
+              <Text style={styles.privacySectionTitle}>5. 이용자의 권리</Text>
+              <Text style={styles.privacyText}>
+                이용자는 열람, 수정, 삭제, 처리 정지를 요청할 수 있으며, 담당자 이메일로 접수 가능합니다.
+              </Text>
+              
+              <Text style={styles.privacyText}>
+                자세한 내용은 개인정보처리방침 전문을 참고해 주세요.
+              </Text>
+            </ScrollView>
+            
+            <View style={styles.privacyModalFooter}>
+              <TouchableOpacity onPress={openPrivacyPolicy} style={styles.linkButton}>
+                <Text style={styles.linkButtonText}>전문 보기</Text>
+                <Ionicons name="open-outline" size={16} color="#4A90E2" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={() => {
+                  setAgreeTerms(true);
+                  hidePrivacyModal();
+                }} 
+                style={styles.agreeButton}
+              >
+                <Text style={styles.agreeButtonText}>동의하고 계속</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={modalVisible}
@@ -366,6 +474,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  checkboxTextContainer: {
+    flex: 1,
+  },
   checkboxText: {
     fontSize: 14,
     color: '#666',
@@ -432,5 +543,83 @@ const styles = StyleSheet.create({
   },
   modalButtonCancelText: {
     color: '#666',
+  },
+  privacyModalContent: {
+    backgroundColor: 'white',
+    margin: 20,
+    borderRadius: 12,
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  privacyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  privacyModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  privacyModalBody: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  privacyText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  privacySectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  privacyModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderRadius: 8,
+    flex: 1,
+    marginRight: 10,
+    justifyContent: 'center',
+  },
+  linkButtonText: {
+    color: '#4A90E2',
+    fontSize: 14,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  agreeButton: {
+    backgroundColor: '#4A90E2',
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  agreeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 

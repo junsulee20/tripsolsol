@@ -569,4 +569,25 @@ export const getUserSettlements = async (userId: string): Promise<Settlement[]> 
     console.error('Error getting user settlements:', error);
     return [];
   }
+};
+
+// 현재 로그인한 사용자의 Firestore 정보 가져오기 (캐릭터 정보 포함)
+export const getCurrentUserFromFirestore = async (): Promise<(User & { photoURL?: string }) | null> => {
+  try {
+    const authUser = getCurrentUser();
+    if (!authUser) return null;
+
+    const userDoc = await getDoc(doc(db, 'users', authUser.uid));
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as User;
+      return {
+        ...userData,
+        photoURL: authUser.photoURL || userData.photoURL || undefined
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting current user from Firestore:', error);
+    return null;
+  }
 }; 

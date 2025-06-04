@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useNavigation } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -9,13 +9,11 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
-  Image,
-  Platform
+  Image
 } from 'react-native';
-import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses } from '../../services/firebaseService';
+import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import TabLayout from '../../components/TabLayout';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -28,9 +26,6 @@ const characterImages = [
 ];
 
 export default function TravelListScreen() {
-  const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-
   const [user, setUser] = useState<{ name: string; avatar: string; character?: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,47 +33,20 @@ export default function TravelListScreen() {
   const [tripBalances, setTripBalances] = useState<{ [tripId: string]: { receivable: number; payable: number } }>({});
 
   useEffect(() => {
-    if (user) {
-      navigation.setOptions({
-        headerTitle: () => (
-          <View style={styles.customHeaderTitleContainer}>
-            <Image 
-              source={user.character ? characterImages[characterKeys.indexOf(user.character)] : require('../../assets/images/default-avatar.png')} 
-              style={styles.headerAvatar}
-            />
-            <Text style={styles.headerTitleText}>{user.name}님, 반갑습니다!</Text>
-          </View>
-        ),
-        headerRight: () => (
-          <TouchableOpacity onPress={() => router.push('/profile/settings')} style={styles.settingsButton}>
-            <Ionicons name="settings-outline" size={24} color="#333" />
-          </TouchableOpacity>
-        ),
-        headerStyle: {
-          backgroundColor: 'white',
-        },
-        headerShadowVisible: false,
-      });
-    }
-  }, [user, navigation]);
-
-  useEffect(() => {
     console.log('TravelListScreen useEffect triggered');
     
     // Firebase 연결 테스트
     testFirebaseConnection();
     
+    // 현재 인증된 사용자가 있는지 즉시 확인
     const currentUser = getCurrentUser();
     if (currentUser) {
       console.log('Already authenticated user found:', currentUser.uid);
-      setUser({
-        name: currentUser.displayName || '사용자',
-        avatar: currentUser.displayName?.charAt(0) || '사',
-        character: currentUser.photoURL || undefined
-      });
+      loadUserInfo();
       loadTrips(currentUser.uid);
     }
     
+    // 인증 상태 변화 감지
     const unsubscribe = onAuthStateChange((firebaseUser) => {
       console.log('Auth state changed:', firebaseUser ? firebaseUser.uid : 'No user');
       
@@ -90,11 +58,7 @@ export default function TravelListScreen() {
           photoURL: firebaseUser.photoURL
         });
         
-        setUser({
-          name: firebaseUser.displayName || '사용자',
-          avatar: firebaseUser.displayName?.charAt(0) || '사',
-          character: firebaseUser.photoURL || undefined
-        });
+        loadUserInfo();
         loadTrips(firebaseUser.uid);
       } else {
         console.log('No authenticated user, redirecting to login');
@@ -105,6 +69,31 @@ export default function TravelListScreen() {
 
     return unsubscribe;
   }, []);
+
+  // 사용자 정보 로드 (Firestore에서 최신 캐릭터 정보 포함)
+  const loadUserInfo = async () => {
+    try {
+      const userInfo = await getCurrentUserFromFirestore();
+      if (userInfo) {
+        setUser({
+          name: userInfo.name || '사용자',
+          avatar: userInfo.name?.charAt(0) || '사',
+          character: userInfo.photoURL || undefined
+        });
+      }
+    } catch (error) {
+      console.error('Error loading user info:', error);
+      // 실패 시 기본값 설정
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        setUser({
+          name: currentUser.displayName || '사용자',
+          avatar: currentUser.displayName?.charAt(0) || '사',
+          character: currentUser.photoURL || undefined
+        });
+      }
+    }
+  };
 
   // 개별 지출에 대한 받을돈/줄돈 계산 (trip/[id]와 동일한 로직)
   const calculateExpenseAmount = (expense: Expense, currentUserId: string) => {
@@ -164,7 +153,7 @@ export default function TravelListScreen() {
     }
   };
 
-  const loadTrips = useCallback(async (userId: string) => {
+  const loadTrips = async (userId: string) => {
     try {
       console.log('loadTrips called with userId:', userId);
       setLoading(true);
@@ -187,18 +176,19 @@ export default function TravelListScreen() {
       setRefreshing(false);
       console.log('Loading completed');
     }
-  }, []);
+  };
 
-  const onRefresh = useCallback(() => {
+  const onRefresh = () => {
     console.log('Refresh triggered');
     const currentUser = getCurrentUser();
     console.log('Current user for refresh:', currentUser ? currentUser.uid : 'No user');
     
     if (currentUser) {
       setRefreshing(true);
+      loadUserInfo();
       loadTrips(currentUser.uid);
     }
-  }, [loadTrips]);
+  };
 
   const handleAddTravel = () => {
     router.push('/trip/create');
@@ -264,79 +254,183 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
+      <TabLayout>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>로딩 중...</Text>
+        </View>
+      </TabLayout>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { paddingTop: Platform.OS === 'android' ? insets.top : 0 }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {trips.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <View style={styles.travelListContainer}>
-          {trips.map(renderTravelItem)}
+    <TabLayout>
+      <View style={styles.header}>
+        <View style={styles.userInfo}>
+          <View style={styles.avatar}>
+            {user?.character && characterKeys.includes(user.character) ? (
+              <Image
+                source={characterImages[characterKeys.indexOf(user.character)]}
+                style={styles.characterImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{user?.avatar || '사'}</Text>
+            )}
+          </View>
+          <View style={styles.userTextContainer}>
+            <Text style={styles.userName}>{user?.name || '사용자'}</Text>
+            <Text style={styles.subtitle}>정산할 여행을 선택해주세요!</Text>
+          </View>
         </View>
-      )}
-    </ScrollView>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={onRefresh}
+          >
+            <Ionicons name="refresh" size={20} color="#4A90E2" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={handleAddTravel}
+          >
+            <Ionicons name="add" size={24} color="#4A90E2" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.section}>
+          <View style={styles.travelsList}>
+            {trips.length > 0 ? (
+              trips.map(renderTravelItem)
+            ) : (
+              renderEmptyState()
+            )}
+          </View>
+          
+          {trips.length > 0 && (
+            <TouchableOpacity style={styles.addTravelButton} onPress={handleAddTravel}>
+              <Ionicons name="add" size={16} color="#4A90E2" />
+              <Text style={styles.addTravelText}>새로운 여행 추가하기</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </ScrollView>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  customHeaderTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    marginRight: 10,
-  },
-  headerTitleText: {
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  settingsButton: {
-    marginRight: 15,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
   },
   loadingText: {
     fontSize: 16,
-    color: '#495057',
+    color: '#666',
   },
-  travelListContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  travelItem: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FF6B6B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    overflow: 'hidden',
+  },
+  characterImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  userTextContainer: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+  },
+  section: {
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  travelsList: {
+    marginBottom: 20,
+  },
+  travelItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -346,60 +440,55 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   travelFlag: {
-    fontSize: 28,
-    marginRight: 16,
+    fontSize: 24,
+    marginRight: 12,
   },
   travelDetails: {
     flex: 1,
   },
   travelCountry: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#212529',
-    marginBottom: 2,
+    color: '#333',
+    marginBottom: 4,
   },
   travelDate: {
-    fontSize: 13,
-    color: '#868E96',
+    fontSize: 14,
+    color: '#666',
   },
   amountContainer: {
-    paddingLeft: 10,
+    alignItems: 'flex-end',
   },
   balanceAmount: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    minHeight: 400,
+    paddingVertical: 40,
   },
   emptyIcon: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   iconBackground: {
-    backgroundColor: '#E3F2FD',
     width: 80,
     height: 80,
     borderRadius: 40,
+    backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
-    color: '#212529',
+    color: '#333',
     marginBottom: 8,
-    textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 15,
-    color: '#495057',
-    marginBottom: 24,
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
-    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   createTravelButton: {
     flexDirection: 'row',
@@ -410,9 +499,26 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   createTravelText: {
+    fontSize: 16,
     color: '#4A90E2',
-    fontSize: 15,
-    fontWeight: '600',
     marginLeft: 8,
+    fontWeight: '600',
+  },
+  addTravelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E3F2FD',
+    borderStyle: 'dashed',
+  },
+  addTravelText: {
+    fontSize: 16,
+    color: '#4A90E2',
+    marginLeft: 8,
+    fontWeight: '600',
   },
 }); 
