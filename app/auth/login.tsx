@@ -66,15 +66,12 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <View style={styles.logo}>
-              <Image 
-                source={require('../../assets/images/logo.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
-              />
-            </View>
+            <Image 
+              source={require('../../assets/images/tripsolsol_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
-          <Text style={styles.title}>트립솔솔</Text>
         </View>
 
         <View style={styles.form}>
@@ -141,24 +138,12 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logoContainer: {
-    marginBottom: 24,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 16,
   },
   logoImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#333',
+    width: 120,
+    height: 120,
+    borderRadius: 20,
   },
   form: {
     gap: 16,
