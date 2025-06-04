@@ -1,41 +1,107 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
-
-const mockGroups = [
-  { id: '1', name: '21학번 동기 유럽 여행', icon: 'airplane', color: '#4A90E2' },
-  { id: '2', name: '오사카 커플 여행', icon: 'heart', color: '#FF6B6B' },
-  { id: '3', name: '8.21-8.23 학술 컨퍼런스', icon: 'school', color: '#FFA726' },
-  { id: '4', name: '베트남 다낭', icon: 'airplane', color: '#4A90E2' },
-];
+import { getUserTrips, getCurrentUser } from '../../services/firebaseService';
+import { Trip } from '../../types';
 
 export default function AddExpenseScreen() {
-  const handleSelectGroup = (group: any) => {
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchUserTrips();
+  }, []);
+
+  const fetchUserTrips = async () => {
+    try {
+      setLoading(true);
+      const currentUser = getCurrentUser();
+      
+      if (!currentUser) {
+        Alert.alert('오류', '로그인이 필요합니다.');
+        router.replace('/auth/login');
+        return;
+      }
+
+      const userTrips = await getUserTrips(currentUser.uid);
+      setTrips(userTrips);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      Alert.alert('오류', '여행 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectTrip = (trip: Trip) => {
     router.push({
       pathname: '/expense/detail',
-      params: { groupId: group.id, groupName: group.name }
+      params: { tripId: trip.id, tripName: trip.name }
     });
   };
 
-  const renderGroupItem = ({ item }: { item: any }) => (
+  const getTripIcon = (trip: Trip) => {
+    // 여행의 이모지가 있으면 사용, 없으면 기본 아이콘
+    if (trip.emoji) {
+      return trip.emoji;
+    }
+    return 'airplane';
+  };
+
+  const getTripColor = (tripId: string) => {
+    const colors = ['#4A90E2', '#FF6B6B', '#FFA726', '#4ECDC4', '#96CEB4'];
+    const index = tripId.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
+
+  const renderTripItem = ({ item }: { item: Trip }) => (
     <TouchableOpacity
       style={styles.groupItem}
-      onPress={() => handleSelectGroup(item)}
+      onPress={() => handleSelectTrip(item)}
     >
-      <View style={[styles.groupIcon, { backgroundColor: item.color }]}>
-        <Ionicons name={item.icon as any} size={20} color="white" />
+      <View style={[styles.groupIcon, { backgroundColor: getTripColor(item.id) }]}>
+        {item.emoji ? (
+          <Text style={styles.emojiIcon}>{item.emoji}</Text>
+        ) : (
+          <Ionicons name="airplane" size={20} color="white" />
+        )}
       </View>
-      <Text style={styles.groupName}>{item.name}</Text>
+      <View style={styles.groupInfo}>
+        <Text style={styles.groupName}>{item.name}</Text>
+        <Text style={styles.groupDescription}>
+          {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <TabLayout>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>지출 추가할 여행 선택</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+          <Text style={styles.loadingText}>여행 목록 불러오는 중...</Text>
+        </View>
+      </TabLayout>
+    );
+  }
 
   return (
     <TabLayout>
@@ -43,23 +109,37 @@ export default function AddExpenseScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>지출 추가할 그룹 선택</Text>
+        <Text style={styles.headerTitle}>지출 추가할 여행 선택</Text>
         <View style={styles.placeholder} />
       </View>
 
       <View style={styles.content}>
         <View style={styles.instructionContainer}>
           <Text style={styles.instructionText}>
-            지출을 추가할 그룹을 선택해주세요
+            지출을 추가할 여행을 선택해주세요
           </Text>
         </View>
 
-        <FlatList
-          data={mockGroups}
-          renderItem={renderGroupItem}
-          keyExtractor={item => item.id}
-          style={styles.groupsList}
-        />
+        {trips.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="airplane-outline" size={50} color="#ccc" />
+            <Text style={styles.emptyText}>등록된 여행이 없습니다</Text>
+            <TouchableOpacity 
+              style={styles.createTripButton}
+              onPress={() => router.push('/trip/create')}
+            >
+              <Text style={styles.createTripButtonText}>새 여행 만들기</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={trips}
+            renderItem={renderTripItem}
+            keyExtractor={item => item.id}
+            style={styles.groupsList}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
     </TabLayout>
   );
@@ -68,20 +148,16 @@ export default function AddExpenseScreen() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#f0f0f0',
+    backgroundColor: 'white',
   },
   backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontSize: 18,
@@ -89,55 +165,98 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   placeholder: {
-    width: 32,
+    width: 40,
   },
   content: {
     flex: 1,
-    padding: 20,
+    backgroundColor: '#f8f9fa',
   },
   instructionContainer: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
+    padding: 20,
+    backgroundColor: 'white',
+    marginBottom: 20,
   },
   instructionText: {
     fontSize: 16,
-    color: '#1976D2',
+    color: '#666',
     textAlign: 'center',
-    fontWeight: '500',
   },
   groupsList: {
     flex: 1,
+    paddingHorizontal: 16,
   },
   groupItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
     backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 12,
     marginBottom: 12,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   groupIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    marginRight: 16,
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  emojiIcon: {
+    fontSize: 20,
+  },
+  groupInfo: {
+    flex: 1,
   },
   groupName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
+  },
+  groupDescription: {
+    fontSize: 14,
+    color: '#666',
+  },
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  createTripButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  createTripButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

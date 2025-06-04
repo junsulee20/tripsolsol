@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "영수증을 스캔하기 위해 카메라 권한이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +21,11 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.jeehana.tripsolsol"
+      "package": "com.jeehana.tripsolsol",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -35,7 +43,13 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-barcode-scanner"
+      "expo-barcode-scanner",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "영수증을 스캔하기 위해 카메라 권한이 필요합니다."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

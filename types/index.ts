@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   profileImage?: string;
+  bankAccount?: string;
   createdAt: Date;
 }
 
@@ -29,10 +30,18 @@ export interface Expense {
   currency: string;
   paidBy: string; // User ID
   splitBetween: string[]; // User IDs
+  splitDetails?: ExpenseSplit[]; // 각 멤버별 상세 분할 정보
+  splitMethod?: string; // 분할 방법 ('equal', 'unequal', 'custom')
   category: ExpenseCategory;
   date: Date;
   receipt?: string; // Image URL
   createdAt: Date;
+}
+
+export interface ExpenseSplit {
+  userId: string;
+  amount: number;
+  percentage: number;
 }
 
 export interface Settlement {

@@ -8,18 +8,29 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl
+  RefreshControl,
+  Image
 } from 'react-native';
-import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, calculateRealTripBalances } from '../../services/firebaseService';
-import { Trip } from '../../types';
+import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses } from '../../services/firebaseService';
+import { Trip, Expense } from '../../types';
 import TabLayout from '../../components/TabLayout';
 
+// 캐릭터 이미지 목록 및 키값
+const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
+const characterImages = [
+  require('../../assets/images/characters/bear.png'),
+  require('../../assets/images/characters/dino.png'),
+  require('../../assets/images/characters/dog.png'),
+  require('../../assets/images/characters/koala.png'),
+  require('../../assets/images/characters/cat.png'),
+];
+
 export default function TravelListScreen() {
-  const [user, setUser] = useState<{ name: string; avatar: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; avatar: string; character?: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tripBalances, setTripBalances] = useState<{ [tripId: string]: number }>({});
+  const [tripBalances, setTripBalances] = useState<{ [tripId: string]: { receivable: number; payable: number } }>({});
 
   useEffect(() => {
     console.log('TravelListScreen useEffect triggered');
@@ -33,7 +44,8 @@ export default function TravelListScreen() {
       console.log('Already authenticated user found:', currentUser.uid);
       setUser({
         name: currentUser.displayName || '사용자',
-        avatar: currentUser.displayName?.charAt(0) || '사'
+        avatar: currentUser.displayName?.charAt(0) || '사',
+        character: currentUser.photoURL || undefined
       });
       loadTrips(currentUser.uid);
     }
@@ -46,12 +58,14 @@ export default function TravelListScreen() {
         console.log('User authenticated:', {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          displayName: firebaseUser.displayName
+          displayName: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL
         });
         
         setUser({
           name: firebaseUser.displayName || '사용자',
-          avatar: firebaseUser.displayName?.charAt(0) || '사'
+          avatar: firebaseUser.displayName?.charAt(0) || '사',
+          character: firebaseUser.photoURL || undefined
         });
         loadTrips(firebaseUser.uid);
       } else {
@@ -64,19 +78,61 @@ export default function TravelListScreen() {
     return unsubscribe;
   }, []);
 
-  // 실제 정산 금액 계산 함수
+  // 개별 지출에 대한 받을돈/줄돈 계산 (trip/[id]와 동일한 로직)
+  const calculateExpenseAmount = (expense: Expense, currentUserId: string) => {
+    const splitAmount = expense.amount / expense.splitBetween.length;
+    
+    if (expense.paidBy === currentUserId) {
+      // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+      const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
+      return {
+        amount: othersAmount,
+        type: 'receive' as 'receive'
+      };
+    } else if (expense.splitBetween.includes(currentUserId)) {
+      // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+      return {
+        amount: splitAmount,
+        type: 'owe' as 'owe'
+      };
+    } else {
+      // 내가 관련없는 지출
+      return { amount: 0, type: 'owe' as 'owe' };
+    }
+  };
+
+  // 여행별 정산 금액 계산
   const loadTripBalance = async (tripId: string) => {
     try {
-      const balances = await calculateRealTripBalances(tripId);
       const currentUser = getCurrentUser();
-      if (currentUser) {
-        const userBalance = balances.find(b => b.userId === currentUser.uid);
-        const netBalance = userBalance ? userBalance.amount : 0;
-        setTripBalances(prev => ({ ...prev, [tripId]: netBalance }));
-      }
+      if (!currentUser) return;
+
+      const expenses = await getTripExpenses(tripId);
+      let totalReceivable = 0;  // 받을 돈
+      let totalPayable = 0;     // 줄 돈
+
+      expenses.forEach(expense => {
+        const { amount, type } = calculateExpenseAmount(expense, currentUser.uid);
+        if (type === 'receive') {
+          totalReceivable += amount;
+        } else if (type === 'owe') {
+          totalPayable += amount;
+        }
+      });
+
+      setTripBalances(prev => ({ 
+        ...prev, 
+        [tripId]: { 
+          receivable: Math.round(totalReceivable), 
+          payable: Math.round(totalPayable) 
+        } 
+      }));
     } catch (error) {
       console.error('Error loading trip balance:', error);
-      setTripBalances(prev => ({ ...prev, [tripId]: 0 }));
+      setTripBalances(prev => ({ 
+        ...prev, 
+        [tripId]: { receivable: 0, payable: 0 } 
+      }));
     }
   };
 
@@ -125,8 +181,12 @@ export default function TravelListScreen() {
   };
 
   const renderTravelItem = (travel: Trip) => {
-    const netBalance = tripBalances[travel.id] || 0;
-    const formattedBalance = netBalance >= 0 ? `+₩${Math.abs(netBalance).toLocaleString()}` : `-₩${Math.abs(netBalance).toLocaleString()}`;
+    const balance = tripBalances[travel.id] || { receivable: 0, payable: 0 };
+    const netBalance = balance.receivable - balance.payable;
+    const isPositive = netBalance >= 0;
+    const formattedBalance = isPositive 
+      ? `+KRW ${Math.abs(netBalance).toLocaleString()}`
+      : `-KRW ${Math.abs(netBalance).toLocaleString()}`;
     
     return (
       <TouchableOpacity
@@ -145,12 +205,9 @@ export default function TravelListScreen() {
           </View>
         </View>
         <View style={styles.amountContainer}>
-          <Text style={styles.travelAmount}>
-            ₩{travel.totalAmount?.toLocaleString?.() || '0'}
-          </Text>
           <Text style={[
             styles.balanceAmount,
-            { color: formattedBalance.startsWith('+') ? '#27ae60' : '#e74c3c' }
+            { color: isPositive ? '#FF6B6B' : '#4A90E2' }
           ]}>
             {formattedBalance}
           </Text>
@@ -192,7 +249,15 @@ export default function TravelListScreen() {
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.avatar || '사'}</Text>
+            {user?.character && characterKeys.includes(user.character) ? (
+              <Image
+                source={characterImages[characterKeys.indexOf(user.character)]}
+                style={styles.characterImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.avatarText}>{user?.avatar || '사'}</Text>
+            )}
           </View>
           <View style={styles.userTextContainer}>
             <Text style={styles.userName}>{user?.name || '사용자'}</Text>
@@ -278,6 +343,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  characterImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: 'white',
@@ -372,15 +442,9 @@ const styles = StyleSheet.create({
   amountContainer: {
     alignItems: 'flex-end',
   },
-  travelAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
   balanceAmount: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 18,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',

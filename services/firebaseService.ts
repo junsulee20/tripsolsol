@@ -26,7 +26,7 @@ import { auth, db } from '../config/firebase';
 import { Balance, Expense, Settlement, Trip, User } from '../types';
 
 // Auth Services
-export const signUp = async (email: string, password: string, name: string): Promise<User> => {
+export const signUp = async (email: string, password: string, name: string, bankAccount?: string): Promise<User> => {
   try {
     console.log('Starting signup process...');
     
@@ -37,6 +37,7 @@ export const signUp = async (email: string, password: string, name: string): Pro
       id: userCredential.user.uid,
       email,
       name,
+      bankAccount,
       createdAt: new Date()
     };
     
@@ -213,6 +214,32 @@ export const createTrip = async (trip: Omit<Trip, 'id'>): Promise<string> => {
   }
 };
 
+export const updateTripParticipants = async (tripId: string, participants: string[]): Promise<void> => {
+  try {
+    const tripRef = doc(db, 'trips', tripId);
+    await updateDoc(tripRef, {
+      participants,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating trip participants:', error);
+    throw error;
+  }
+};
+
+export const updateTripData = async (tripId: string, updates: Partial<Trip>): Promise<void> => {
+  try {
+    const tripRef = doc(db, 'trips', tripId);
+    await updateDoc(tripRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    console.error('Error updating trip data:', error);
+    throw error;
+  }
+};
+
 export const getUserTrips = async (userId: string): Promise<Trip[]> => {
   try {
     console.log('Fetching trips for user:', userId);
@@ -304,13 +331,28 @@ export const addExpense = async (expense: Omit<Expense, 'id'>): Promise<string> 
 
 export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
   try {
+    console.log('Getting expenses for tripId:', tripId);
     const expensesRef = collection(db, 'expenses');
-    const q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
-    const querySnapshot = await getDocs(q);
+    
+    // First try with orderBy
+    let q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
+    let querySnapshot;
+    
+    try {
+      querySnapshot = await getDocs(q);
+      console.log('Query with orderBy successful, snapshot size:', querySnapshot.size);
+    } catch (orderByError) {
+      console.log('Query with orderBy failed, trying without orderBy:', orderByError);
+      // If orderBy fails (due to missing index), try without orderBy
+      q = query(expensesRef, where('tripId', '==', tripId));
+      querySnapshot = await getDocs(q);
+      console.log('Query without orderBy, snapshot size:', querySnapshot.size);
+    }
     
     const expenses: Expense[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+      console.log('Found expense document:', doc.id, data);
       expenses.push({
         id: doc.id,
         ...data,
@@ -319,6 +361,10 @@ export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
       } as Expense);
     });
     
+    // Sort by date if we didn't use orderBy
+    expenses.sort((a, b) => b.date.getTime() - a.date.getTime());
+    
+    console.log('Total expenses found:', expenses.length);
     return expenses;
   } catch (error) {
     console.error('Error getting trip expenses:', error);
@@ -437,15 +483,27 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
   });
   
   expenses.forEach(expense => {
-    const splitAmount = expense.amount / expense.splitBetween.length;
-    
-    // Add to payer's balance (they paid for others)
-    balances[expense.paidBy] -= expense.amount;
-    
-    // Subtract from each person's balance (they owe money)
-    expense.splitBetween.forEach(userId => {
-      balances[userId] += splitAmount;
-    });
+    // splitDetails가 있는 경우 더 정확한 계산 사용
+    if (expense.splitDetails && expense.splitDetails.length > 0) {
+      // 결제자는 전체 금액을 지불했으므로 음수 (받아야 할 돈)
+      balances[expense.paidBy] -= expense.amount;
+      
+      // 각 사용자는 자신의 몫만큼 양수 (줘야 할 돈)
+      expense.splitDetails.forEach(split => {
+        balances[split.userId] += split.amount;
+      });
+    } else {
+      // 기존 방식 (균등 분할)
+      const splitAmount = expense.amount / expense.splitBetween.length;
+      
+      // Add to payer's balance (they paid for others)
+      balances[expense.paidBy] -= expense.amount;
+      
+      // Subtract from each person's balance (they owe money)
+      expense.splitBetween.forEach(userId => {
+        balances[userId] += splitAmount;
+      });
+    }
   });
   
   return Object.entries(balances).map(([userId, amount]) => ({
