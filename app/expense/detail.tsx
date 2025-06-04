@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,14 @@ import {
   ActivityIndicator,
   Modal
 } from 'react-native';
-import RNDateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+let RNDateTimePicker: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    RNDateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (error) {
+    console.warn('DateTimePicker not available:', error);
+  }
+}
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import TabLayout from '../../components/TabLayout';
@@ -73,6 +80,7 @@ const parseDisplayAmount = (formattedAmount: string): string => {
 
 export default function ExpenseDetailScreen() {
   const { tripId, tripName, ocrAmount, ocrDescription } = useLocalSearchParams();
+  const hiddenDateInputRef = useRef<HTMLInputElement>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [userTrips, setUserTrips] = useState<Trip[]>([]);
   const [tripSelectionModalVisible, setTripSelectionModalVisible] = useState(false);
@@ -92,6 +100,7 @@ export default function ExpenseDetailScreen() {
   const [splitMethod, setSplitMethod] = useState('equal');
   const [memo, setMemo] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date());
+  const [tempDateInput, setTempDateInput] = useState(''); // 웹에서 임시 날짜 입력용
 
   useEffect(() => {
     initializeData();
@@ -455,7 +464,16 @@ export default function ExpenseDetailScreen() {
   };
 
   // DateTimePicker onChange handler
-  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'web') {
+      // Web에서는 input[type="date"]의 onChange 이벤트 처리
+      if (selectedDate) {
+        setExpenseDate(selectedDate);
+      }
+      return;
+    }
+
+    // 모바일에서의 DateTimePicker 이벤트 처리
     const { type } = event;
     if (Platform.OS === 'android') {
       setShowDatePicker(false); // Always close for Android after any interaction
@@ -540,24 +558,124 @@ export default function ExpenseDetailScreen() {
           {/* 1.5. 날짜 선택 섹션 */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>언제 지출했나요?</Text>
-            <TouchableOpacity
-              style={styles.dateSelector}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <View style={styles.dateSelectorContent}>
-                <Ionicons name="calendar" size={20} color="#4A90E2" />
-                <Text style={styles.dateText}>{formatDate(expenseDate)}</Text>
-                <Ionicons name="chevron-down" size={16} color="#666" />
+            {Platform.OS === 'web' ? (
+              // 웹에서는 직접 입력과 캘린더 선택을 분리
+              <View style={styles.dateSelector}>
+                <View style={styles.dateSelectorContent}>
+                  {/* 캘린더 아이콘 영역 - 날짜 선택기 input과 겹치게 */}
+                  <View style={{ position: 'relative', zIndex: 1 }}>
+                    <Ionicons name="calendar" size={20} color="#4A90E2" />
+                    <input
+                      ref={hiddenDateInputRef as any}
+                      type="date"
+                      value={expenseDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setExpenseDate(newDate);
+                          setTempDateInput('');
+                        }
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </View>
+                  
+                  <input
+                    type="text"
+                    value={tempDateInput || expenseDate.toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      setTempDateInput(e.target.value);
+                      
+                      // YYYY-MM-DD 형식이 완성되면 즉시 적용
+                      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+                      if (datePattern.test(e.target.value)) {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setExpenseDate(newDate);
+                          setTempDateInput('');
+                        }
+                      }
+                    }}
+                    onFocus={() => {
+                      setTempDateInput(expenseDate.toISOString().split('T')[0]);
+                    }}
+                    onBlur={() => {
+                      setTempDateInput('');
+                    }}
+                    placeholder="YYYY-MM-DD"
+                    style={{
+                      marginLeft: 8,
+                      marginRight: 8,
+                      fontSize: 16,
+                      fontWeight: '600',
+                      color: '#333',
+                      border: 'none',
+                      background: 'transparent',
+                      outline: 'none',
+                      cursor: 'text',
+                      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                      flex: 1,
+                      textAlign: 'center',
+                    }}
+                  />
+                  
+                  {/* 드롭다운 화살표 영역 - 날짜 선택기 input과 겹치게 */}
+                  <View style={{ position: 'relative', zIndex: 1 }}>
+                    <Ionicons name="chevron-down" size={16} color="#666" />
+                    <input
+                      type="date"
+                      value={expenseDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setExpenseDate(newDate);
+                          setTempDateInput('');
+                        }
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                      }}
+                    />
+                  </View>
+                </View>
               </View>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <RNDateTimePicker
-                testID="dateTimePicker"
-                value={expenseDate}
-                mode="date"
-                display="default"
-                onChange={onDateChange}
-              />
+            ) : (
+              // 모바일에서는 TouchableOpacity + DateTimePicker 사용
+              <>
+                <TouchableOpacity
+                  style={styles.dateSelector}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <View style={styles.dateSelectorContent}>
+                    <Ionicons name="calendar" size={20} color="#4A90E2" />
+                    <Text style={styles.dateText}>{formatDate(expenseDate)}</Text>
+                    <Ionicons name="chevron-down" size={16} color="#666" />
+                  </View>
+                </TouchableOpacity>
+                {showDatePicker && RNDateTimePicker && (
+                  <RNDateTimePicker
+                    testID="dateTimePicker"
+                    value={expenseDate}
+                    mode="date"
+                    display="default"
+                    onChange={onDateChange}
+                  />
+                )}
+              </>
             )}
           </View>
 
