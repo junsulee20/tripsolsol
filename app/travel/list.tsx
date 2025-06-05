@@ -14,6 +14,7 @@ import {
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -341,7 +342,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

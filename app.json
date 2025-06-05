@@ -74,6 +74,17 @@
           "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
           "cameraPermission": "영수증을 촬영하기 위해 카메라 권한이 필요합니다."
         }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Pretendard-Regular.ttf",
+            "./assets/fonts/Pretendard-Medium.ttf", 
+            "./assets/fonts/Pretendard-SemiBold.ttf",
+            "./assets/fonts/Pretendard-Bold.ttf"
+          ]
+        }
       ]
     ],
     "experiments": {

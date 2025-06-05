@@ -7,12 +7,17 @@ import {
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Image,
+  ScrollView,
+  Modal,
+  FlatList
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../config/firebase';
 import { updateUserProfile } from '../../services/firebaseService';
+import { fonts } from '../../styles/globalStyles';
 
 export default function EditProfileScreen() {
   const [name, setName] = useState('');
@@ -106,7 +111,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

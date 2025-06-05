@@ -13,11 +13,13 @@ import {
   TouchableOpacity,
   View,
   FlatList,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { createTrip, searchUserByName, getCurrentUser } from '../../services/firebaseService';
 import { User } from '../../types';
 import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 // 웹 환경에서 Alert를 위한 유틸리티 함수
 const showAlert = (title: string, message: string) => {
@@ -597,7 +599,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

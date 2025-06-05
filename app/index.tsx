@@ -3,6 +3,7 @@ import { User as FirebaseUser } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getCurrentUser, onAuthStateChange } from '../services/firebaseService';
+import { fonts } from '../styles/globalStyles';
 
 export default function IndexScreen() {
   const [isLoading, setIsLoading] = useState(true);

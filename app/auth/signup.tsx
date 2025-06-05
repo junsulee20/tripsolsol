@@ -17,6 +17,7 @@ import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
 import { Ionicons } from '@expo/vector-icons';
 import { FirebaseError } from 'firebase/app';
+import { fonts } from '../../styles/globalStyles';
 
 export default function SignUpScreen() {
   const [name, setName] = useState('');
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

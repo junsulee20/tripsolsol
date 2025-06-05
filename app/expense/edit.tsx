@@ -31,6 +31,7 @@ import {
   getTripExpenses
 } from '../../services/firebaseService';
 import { Trip, User, Expense, ExpenseSplit, ExpenseCategory } from '../../types';
+import { fonts } from '../../styles/globalStyles';
 
 const splitMethods = [
   { id: 'equal', name: '균일하게', description: '모든 사람이 동일한 금액' },
@@ -746,7 +747,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

@@ -16,6 +16,7 @@ import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser, deleteExpense } from '../../services/firebaseService';
 import { convertToKRW } from '../../services/exchangeService';
 import { Trip, User, Expense, ExpenseSplit, ExpenseCategory } from '../../types';
+import { fonts } from '../../styles/globalStyles';
 
 // 지출 카테고리별 이모지 매핑
 const categoryEmojiMap: { [key in ExpenseCategory]: string } = {
@@ -379,15 +380,23 @@ export default function TripDetailScreen() {
       <View style={styles.tripMateCard}>
         <View style={styles.tripMateHeader}>
           <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
-          <View style={styles.tripMateList}>
-            {participants.map((participant, index) => (
-              <View key={participant.id} style={styles.tripMateTag}>
-                <Text style={styles.tripMateTagText}>{participant.name}</Text>
-                {participant.id === trip.createdBy && (
-                  <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
-                )}
-              </View>
-            ))}
+          <View style={styles.tripMateContainer}>
+            <View style={styles.tripMateList}>
+              {participants.map((participant, index) => (
+                <View key={participant.id} style={styles.tripMateTag}>
+                  <Text style={styles.tripMateTagText}>{participant.name}</Text>
+                  {participant.id === trip.createdBy && (
+                    <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
+                  )}
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity 
+              style={styles.addMemberButton}
+              onPress={() => router.push(`/trip/edit?id=${id}`)}
+            >
+              <Ionicons name="add" size={16} color="white" />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -647,7 +656,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -670,14 +679,17 @@ const styles = StyleSheet.create({
   },
   flagText: {
     fontSize: 24,
+    fontFamily: fonts.regular,
   },
   tripTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
   },
   tripSubtitle: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#666',
   },
   timerButton: {
@@ -698,11 +710,13 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
     marginBottom: 4,
   },
   summarySubtitle: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#1976D2',
     marginBottom: 16,
   },
@@ -715,6 +729,7 @@ const styles = StyleSheet.create({
   settleButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
   },
   expensesContainer: {
@@ -729,6 +744,7 @@ const styles = StyleSheet.create({
   sectionDate: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
     marginBottom: 12,
   },
@@ -757,6 +773,7 @@ const styles = StyleSheet.create({
   },
   expenseEmoji: {
     fontSize: 16,
+    fontFamily: fonts.regular,
   },
   expenseDetails: {
     flex: 1,
@@ -764,10 +781,12 @@ const styles = StyleSheet.create({
   expenseName: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: fonts.medium,
     color: '#333',
   },
   expensePaidBy: {
     fontSize: 12,
+    fontFamily: fonts.regular,
     color: '#666',
   },
   expenseAmountContainer: {
@@ -776,15 +795,18 @@ const styles = StyleSheet.create({
   expenseAmountLabel: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: fonts.medium,
     marginBottom: 2,
   },
   expenseAmount: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#FF6B6B',
   },
   originalCurrency: {
     fontSize: 12,
+    fontFamily: fonts.regular,
     color: '#666',
   },
   modalOverlay: {
@@ -812,6 +834,7 @@ const styles = StyleSheet.create({
   modalDate: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
     marginBottom: 16,
   },
@@ -831,16 +854,19 @@ const styles = StyleSheet.create({
   },
   modalExpenseEmoji: {
     fontSize: 20,
+    fontFamily: fonts.regular,
   },
   modalExpenseName: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
     flex: 1,
   },
   modalExpenseAmount: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#4A90E2',
   },
   modalActions: {
@@ -858,6 +884,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#4A90E2',
     marginLeft: 4,
   },
@@ -871,6 +898,7 @@ const styles = StyleSheet.create({
   },
   deleteButtonText: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#FF6B6B',
     marginLeft: 4,
   },
@@ -883,6 +911,7 @@ const styles = StyleSheet.create({
   splitTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
     marginBottom: 12,
   },
@@ -908,9 +937,11 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
   },
   memberName: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#333',
     flex: 1,
   },
@@ -920,12 +951,14 @@ const styles = StyleSheet.create({
   },
   memberAmount: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#666',
     marginRight: 8,
   },
   memberAmountValue: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
   },
   memoSection: {
@@ -936,11 +969,13 @@ const styles = StyleSheet.create({
   memoTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
     marginBottom: 8,
   },
   memoText: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#1976D2',
   },
   loadingContainer: {
@@ -963,8 +998,13 @@ const styles = StyleSheet.create({
   tripMateTitle: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#1976D2',
     marginRight: 12,
+  },
+  tripMateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   tripMateList: {
     flexDirection: 'row',
@@ -985,11 +1025,30 @@ const styles = StyleSheet.create({
   },
   tripMateTagText: {
     fontSize: 14,
+    fontFamily: fonts.semiBold,
     color: '#1565C0',
     fontWeight: '600',
   },
   creatorIcon: {
     marginLeft: 4,
+  },
+  addMemberButton: {
+    backgroundColor: '#4A90E2',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   emptyExpensesContainer: {
     flex: 1,
@@ -1000,11 +1059,13 @@ const styles = StyleSheet.create({
   emptyExpensesTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
     marginBottom: 16,
   },
   emptyExpensesSubtitle: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#666',
     marginBottom: 20,
   },
@@ -1019,6 +1080,7 @@ const styles = StyleSheet.create({
   addExpenseButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: 'white',
   },
   floatingActionButton: {
@@ -1058,6 +1120,7 @@ const styles = StyleSheet.create({
   customModalText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
     marginTop: 12,
   },
@@ -1089,11 +1152,13 @@ const styles = StyleSheet.create({
   deleteModalTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#FF6B6B',
     marginLeft: 8,
   },
   deleteModalMessage: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#333',
     textAlign: 'center',
     marginBottom: 20,
@@ -1116,11 +1181,13 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#FF6B6B',
   },
   confirmDeleteButtonText: {
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: 'white',
   },
 }); 

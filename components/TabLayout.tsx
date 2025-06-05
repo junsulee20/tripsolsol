@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TabBar from './TabBar';
+import { fonts } from '../styles/globalStyles';
 
 interface TabLayoutProps {
   children: React.ReactNode;
@@ -8,8 +10,15 @@ interface TabLayoutProps {
 }
 
 export default function TabLayout({ children, showTabBar = true }: TabLayoutProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      {
+        paddingTop: Platform.OS === 'android' ? insets.top : 0,
+      }
+    ]}>
       <View style={styles.content}>
         {children}
       </View>

@@ -10,8 +10,14 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator,
+  Dimensions
 } from "react-native";
+import { getCurrentUser, getTripById, updateTripParticipants } from '../../services/firebaseService';
+import { Trip } from '../../types';
+import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 // 웹용 QR 스캔을 위한 jsQR import
 let jsQR: any = null;
@@ -363,7 +369,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

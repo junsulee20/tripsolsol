@@ -7,11 +7,15 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert
+  Alert,
+  Modal,
+  Share,
+  Platform
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser, getTripById, getTripExpenses, getUsersByIds } from '../../services/firebaseService';
 import { Expense, Trip, User } from '../../types';
+import { fonts } from '../../styles/globalStyles';
 
 type BalanceItem = {
   fromUserId: string;
@@ -273,7 +277,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

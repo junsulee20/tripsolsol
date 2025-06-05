@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '../../styles/globalStyles';
 
 import { signIn, onAuthStateChange, getCurrentUser } from '../../services/firebaseService';
 
@@ -245,6 +246,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: fonts.medium,
     color: '#333',
     marginBottom: 8,
   },
@@ -254,6 +256,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
+    fontFamily: fonts.regular,
     backgroundColor: 'white',
     color: '#333',
   },
@@ -270,6 +273,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
   },
   signUpButton: {
     backgroundColor: 'transparent',
@@ -283,12 +287,14 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: fonts.medium,
   },
   footer: {
     alignItems: 'center',
   },
   footerText: {
     fontSize: 12,
+    fontFamily: fonts.regular,
     color: '#999',
   },
   modalContainer: {
@@ -321,11 +327,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: fonts.semiBold,
     color: '#333',
     marginLeft: 8,
   },
   modalMessage: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
@@ -341,5 +349,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: fonts.medium,
   },
 }); 

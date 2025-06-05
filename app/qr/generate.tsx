@@ -1,20 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Modal,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Platform,
+  Dimensions
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { auth, db } from '../../config/firebase';
 import { Trip } from '../../types';
+import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 type FBTimestamp = Timestamp | { toDate(): Date } | Date;
 
@@ -233,7 +238,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

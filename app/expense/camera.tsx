@@ -6,13 +6,26 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Platform
+  Platform,
+  Dimensions,
+  ScrollView,
+  Modal,
+  Image
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { processImageWithClovaOCR, OCRResult } from '../../services/ocrService';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
+} from 'react-native-reanimated';
+import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 export default function CameraScreen() {
   const { tripId, tripName } = useLocalSearchParams();
@@ -374,7 +387,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

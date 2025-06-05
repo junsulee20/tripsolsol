@@ -4,6 +4,7 @@ import { ActivityIndicator, View, StyleSheet, Text, Alert } from 'react-native';
 import { getUserTrips, onAuthStateChange } from '../../services/firebaseService';
 import { Trip } from '../../types';
 import { User as FirebaseUser } from 'firebase/auth';
+import { fonts } from '../../styles/globalStyles';
 
 export default function ExpenseTabScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +67,12 @@ export default function ExpenseTabScreen() {
     );
   }
 
-  return null; 
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>지출 화면</Text>
+      <Text style={styles.subtitle}>여행의 지출을 관리하세요!</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -74,7 +80,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8F9FA',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '600',
+    fontFamily: fonts.semiBold,
+    color: '#333',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: '#666',
   },
   loadingText: {
     marginTop: 10,
