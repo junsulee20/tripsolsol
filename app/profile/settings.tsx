@@ -485,20 +485,6 @@ export default function SettingsScreen() {
             )}
           </View>
 
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/qr/scan')}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="qr-code-outline" size={20} color="#333" />
-            </View>
-            <Text style={styles.menuText}>QR 코드 스캔</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/qr/generate')}>
-            <View style={styles.menuIcon}>
-              <Ionicons name="qr-code" size={20} color="#333" />
-            </View>
-            <Text style={styles.menuText}>QR 코드 생성</Text>
-          </TouchableOpacity>
-
           {/* 이용약관 메뉴 */}
           <TouchableOpacity style={styles.menuItem} onPress={openTermsOfService}>
             <View style={styles.menuIcon}>
