@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
-import TabLayout from '../../components/TabLayout';
 import { fonts } from '../../styles/globalStyles';
 
 // 캐릭터 이미지 목록 및 키값
@@ -255,16 +254,14 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <TabLayout>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>로딩 중...</Text>
-        </View>
-      </TabLayout>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>로딩 중...</Text>
+      </View>
     );
   }
 
   return (
-    <TabLayout>
+    <View style={{ flex: 1 }}>
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -323,7 +320,7 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </TabLayout>
+    </View>
   );
 }
 
