@@ -30,10 +30,27 @@
       ]
     },
     "web": {
+      "favicon": "./assets/images/tripsolsol_logo.png",
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/tripsolsol_logo.png"
+      "display": "fullscreen",
+      "themeColor": "#4A90E2",
+      "backgroundColor": "#ffffff",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "shortName": "TripSolSol",
+      "lang": "ko",
+      "scope": "/",
+      "dir": "ltr"
     },
+    "splash": {
+      "image": "./assets/images/tripsolsol_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       "expo-router",
       [

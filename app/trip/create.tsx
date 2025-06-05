@@ -12,7 +12,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  FlatList
+  FlatList,
+  Modal
 } from 'react-native';
 import { createTrip, searchUserByName, getCurrentUser } from '../../services/firebaseService';
 import { User } from '../../types';
@@ -32,9 +33,16 @@ const generateMemberNumber = (userId: string): string => {
   return userId.slice(-6).toUpperCase();
 };
 
+// 여행 이모지 목록
+const TRAVEL_EMOJIS = [
+  '✈️', '🏖️', '🏔️', '🗺️', '🎒', 
+  '🚗', '🚢', '🏕️', '🎡', '🏰'
+];
+
 export default function CreateTripScreen() {
   const [tripName, setTripName] = useState('');
-  const [emoji, setEmoji] = useState('');
+  const [emoji, setEmoji] = useState('✈️');
+  const [showEmojiModal, setShowEmojiModal] = useState(false);
   const [description, setDescription] = useState('');
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -232,6 +240,20 @@ export default function CreateTripScreen() {
     }
   };
 
+  const selectEmoji = (selectedEmoji: string) => {
+    setEmoji(selectedEmoji);
+    setShowEmojiModal(false);
+  };
+
+  const renderEmojiItem = ({ item }: { item: string }) => (
+    <TouchableOpacity 
+      style={styles.emojiItem}
+      onPress={() => selectEmoji(item)}
+    >
+      <Text style={styles.emojiText}>{item}</Text>
+    </TouchableOpacity>
+  );
+
   const renderParticipantItem = ({ item }: { item: User }) => (
     <View style={styles.participantItem}>
       <View style={styles.participantInfo}>
@@ -360,13 +382,14 @@ export default function CreateTripScreen() {
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>여행 이모지</Text>
-              <TextInput
-                style={styles.input}
-                value={emoji}
-                onChangeText={setEmoji}
-                placeholder="예: ✈️"
-                maxLength={2}
-              />
+              <TouchableOpacity
+                style={styles.emojiSelector}
+                onPress={() => setShowEmojiModal(true)}
+              >
+                <Text style={styles.selectedEmoji}>{emoji}</Text>
+                <Text style={styles.emojiSelectorText}>이모지 선택</Text>
+                <Ionicons name="chevron-down" size={20} color="#4A90E2" />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputContainer}>
@@ -532,6 +555,33 @@ export default function CreateTripScreen() {
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* 이모지 선택 모달 */}
+        <Modal
+          visible={showEmojiModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEmojiModal(false)}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.emojiModalContent}>
+              <View style={styles.emojiModalHeader}>
+                <Text style={styles.emojiModalTitle}>여행 이모지 선택</Text>
+                <TouchableOpacity onPress={() => setShowEmojiModal(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={TRAVEL_EMOJIS}
+                renderItem={renderEmojiItem}
+                keyExtractor={(item, index) => index.toString()}
+                numColumns={5}
+                style={styles.emojiGrid}
+                contentContainerStyle={styles.emojiGridContent}
+              />
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </TabLayout>
   );
@@ -547,7 +597,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -744,5 +794,65 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: '600',
+  },
+  emojiSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  selectedEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  emojiSelectorText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  emojiModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  emojiModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emojiModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  emojiGrid: {
+    maxHeight: 300,
+  },
+  emojiGridContent: {
+    alignItems: 'center',
+  },
+  emojiItem: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 5,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+  },
+  emojiText: {
+    fontSize: 32,
   },
 });

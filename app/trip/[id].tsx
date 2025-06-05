@@ -15,7 +15,22 @@ import {
 import TabLayout from '../../components/TabLayout';
 import { getTripById, getUsersByIds, getTripExpenses, getCurrentUser, deleteExpense } from '../../services/firebaseService';
 import { convertToKRW } from '../../services/exchangeService';
-import { Trip, User, Expense, ExpenseSplit } from '../../types';
+import { Trip, User, Expense, ExpenseSplit, ExpenseCategory } from '../../types';
+
+// 지출 카테고리별 이모지 매핑
+const categoryEmojiMap: { [key in ExpenseCategory]: string } = {
+  [ExpenseCategory.FOOD]: '🍽️',
+  [ExpenseCategory.TRANSPORT]: '🚗',
+  [ExpenseCategory.ACCOMMODATION]: '🏨',
+  [ExpenseCategory.ENTERTAINMENT]: '🎡',
+  [ExpenseCategory.SHOPPING]: '🛍️',
+  [ExpenseCategory.OTHER]: '📝',
+};
+
+const getCategoryEmoji = (category?: ExpenseCategory): string => {
+  if (!category) return categoryEmojiMap[ExpenseCategory.OTHER];
+  return categoryEmojiMap[category] || categoryEmojiMap[ExpenseCategory.OTHER];
+};
 
 export default function TripDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -320,7 +335,7 @@ export default function TripDetailScreen() {
       >
         <View style={styles.expenseInfo}>
           <View style={styles.expenseIcon}>
-            <Text style={styles.expenseEmoji}>🍔</Text>
+            <Text style={styles.expenseEmoji}>{getCategoryEmoji(expense.category)}</Text>
           </View>
           <View style={styles.expenseDetails}>
             <Text style={styles.expenseName}>{expense.title}</Text>
@@ -477,7 +492,7 @@ export default function TripDetailScreen() {
                 })}</Text>
                 <View style={styles.modalExpenseInfo}>
                   <View style={styles.modalExpenseIcon}>
-                    <Text style={styles.modalExpenseEmoji}>🍔</Text>
+                    <Text style={styles.modalExpenseEmoji}>{getCategoryEmoji(selectedExpense.category)}</Text>
                   </View>
                   <Text style={styles.modalExpenseName}>{selectedExpense.title}</Text>
                   <Text style={styles.modalExpenseAmount}>{selectedExpense.currency} {selectedExpense.amount}</Text>
@@ -632,7 +647,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

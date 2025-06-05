@@ -30,7 +30,7 @@ import {
   getCurrentUser,
   getTripExpenses
 } from '../../services/firebaseService';
-import { Trip, User, Expense, ExpenseSplit } from '../../types';
+import { Trip, User, Expense, ExpenseSplit, ExpenseCategory } from '../../types';
 
 const splitMethods = [
   { id: 'equal', name: '균일하게', description: '모든 사람이 동일한 금액' },
@@ -51,6 +51,16 @@ const currencies = [
   { code: 'SGD', name: '싱가포르 달러', symbol: 'S$' },
   { code: 'THB', name: '태국 바트', symbol: '฿' },
   { code: 'VND', name: '베트남 동', symbol: '₫' },
+];
+
+// 지출 카테고리별 이모지 및 이름
+const expenseCategories = [
+  { id: ExpenseCategory.FOOD, name: '식사', emoji: '🍽️' },
+  { id: ExpenseCategory.TRANSPORT, name: '교통비', emoji: '🚗' },
+  { id: ExpenseCategory.ACCOMMODATION, name: '숙박', emoji: '🏨' },
+  { id: ExpenseCategory.ENTERTAINMENT, name: '오락', emoji: '🎡' },
+  { id: ExpenseCategory.SHOPPING, name: '쇼핑', emoji: '🛍️' },
+  { id: ExpenseCategory.OTHER, name: '기타', emoji: '📝' },
 ];
 
 interface MemberAmount {
@@ -89,6 +99,7 @@ export default function ExpenseEditScreen() {
   const [saving, setSaving] = useState(false);
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
 
   // Form states
   const [description, setDescription] = useState('');
@@ -100,6 +111,7 @@ export default function ExpenseEditScreen() {
   const [memo, setMemo] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date());
   const [tempDateInput, setTempDateInput] = useState(''); // 웹에서 임시 날짜 입력용
+  const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory>(ExpenseCategory.OTHER);
 
   useEffect(() => {
     initializeData();
@@ -153,6 +165,7 @@ export default function ExpenseEditScreen() {
       setPaidBy(expense.paidBy);
       setMemo(expense.description || '');
       setExpenseDate(expense.date);
+      setSelectedCategory(expense.category || ExpenseCategory.OTHER);
 
       // Initialize member amounts based on existing splitDetails or splitBetween
       let initialAmounts: MemberAmount[] = [];
@@ -198,8 +211,17 @@ export default function ExpenseEditScreen() {
     setCurrencyModalVisible(false);
   };
 
+  const handleCategorySelect = (category: ExpenseCategory) => {
+    setSelectedCategory(category);
+    setCategoryModalVisible(false);
+  };
+
   const getCurrencyInfo = (code: string) => {
     return currencies.find(c => c.code === code) || currencies[0];
+  };
+
+  const getCategoryInfo = (categoryId: ExpenseCategory) => {
+    return expenseCategories.find(cat => cat.id === categoryId) || expenseCategories[5]; // default to OTHER
   };
 
   const handleAmountChange = (text: string) => {
@@ -307,6 +329,7 @@ export default function ExpenseEditScreen() {
         splitDetails,
         description: memo.trim() || undefined,
         date: expenseDate,
+        category: selectedCategory,
       };
       
       await updateExpense(originalExpense.id, expenseUpdate);
@@ -551,6 +574,19 @@ export default function ExpenseEditScreen() {
             />
           </View>
 
+          {/* Category Selection */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>카테고리</Text>
+            <TouchableOpacity
+              style={styles.categorySelector}
+              onPress={() => setCategoryModalVisible(true)}
+            >
+              <Text style={styles.categoryEmoji}>{getCategoryInfo(selectedCategory).emoji}</Text>
+              <Text style={styles.categoryText}>{getCategoryInfo(selectedCategory).name}</Text>
+              <Ionicons name="chevron-down" size={16} color="#666" />
+            </TouchableOpacity>
+          </View>
+
           {/* Amount and Currency */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>금액</Text>
@@ -606,6 +642,44 @@ export default function ExpenseEditScreen() {
             />
           </View>
         </ScrollView>
+
+        {/* Category Selection Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={categoryModalVisible}
+          onRequestClose={() => setCategoryModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.categoryModalContent}>
+              <View style={styles.categoryModalHeader}>
+                <Text style={styles.categoryModalTitle}>카테고리 선택</Text>
+                <TouchableOpacity onPress={() => setCategoryModalVisible(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.categoryList}>
+                {expenseCategories.map((categoryItem) => (
+                  <TouchableOpacity
+                    key={categoryItem.id}
+                    style={[
+                      styles.categoryItem,
+                      selectedCategory === categoryItem.id && styles.categoryItemSelected
+                    ]}
+                    onPress={() => handleCategorySelect(categoryItem.id)}
+                  >
+                    <Text style={styles.categoryItemEmoji}>{categoryItem.emoji}</Text>
+                    <Text style={styles.categoryItemName}>{categoryItem.name}</Text>
+                    {selectedCategory === categoryItem.id && (
+                      <Ionicons name="checkmark" size={20} color="#4A90E2" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Currency Selection Modal */}
         <Modal
@@ -672,7 +746,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -1007,5 +1081,64 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 2,
+  },
+  categorySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  categoryEmoji: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  categoryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  categoryModalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+  },
+  categoryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  categoryModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  categoryList: {
+    maxHeight: 400,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  categoryItemSelected: {
+    backgroundColor: '#E3F2FD',
+  },
+  categoryItemEmoji: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  categoryItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
 }); 
