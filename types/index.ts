@@ -87,12 +87,30 @@ export interface ExchangeRate {
   deal_bas_r: string;
 }
 
+export interface ExchangeRateAPIResponse {
+  result: string;
+  documentation: string;
+  terms_of_use: string;
+  time_last_update_unix: number;
+  time_last_update_utc: string;
+  time_next_update_unix: number;
+  time_next_update_utc: string;
+  base_code: string;
+  conversion_rates: {
+    [currency: string]: number;
+  };
+}
+
 export interface ExchangeRateResponse {
+  cur_unit: string;        // 통화 코드 (USD, EUR 등)
+  cur_nm: string;          // 통화 이름 (미국 달러, 유로 등)
+  kftc_deal_bas_r: string; // 매매기준율 (문자열로 유지)
   result: number;
-  cur_unit: string;
-  cur_nm: string;
-  kftc_deal_bas_r: string;
   ttb: string;
   tts: string;
   deal_bas_r: string;
+  bkpr: string;
+  yy_efee_r: string;
+  ten_dd_efee_r: string;
+  kftc_bkpr: string;
 } 
