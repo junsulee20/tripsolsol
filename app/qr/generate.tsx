@@ -4,13 +4,13 @@ import { router } from 'expo-router';
 import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  Modal,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Modal,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { auth, db } from '../../config/firebase';
@@ -171,6 +171,10 @@ export default function QRGenerateScreen() {
                 value={getQRData()}
                 size={200}
                 backgroundColor="white"
+                color="black"
+                quietZone={10}
+                enableLinearGradient={false}
+                ecl="M"
               />
             </View>
 
