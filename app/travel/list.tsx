@@ -300,16 +300,14 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <TabLayout>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>로딩 중...</Text>
-        </View>
-      </TabLayout>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>로딩 중...</Text>
+      </View>
     );
   }
 
   return (
-    <TabLayout>
+    <View style={{ flex: 1 }}>
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -368,7 +366,7 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </TabLayout>
+    </View>
   );
 }
 
