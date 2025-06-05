@@ -79,8 +79,18 @@ const formatDisplayAmount = (amount: number | string, currencyCode: string): str
   if (currencyCode === 'KRW') {
     return num.toLocaleString('ko-KR'); // KRW: no decimals, with commas
   } else {
-    // Other currencies: 2 decimal places, with commas
-    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); 
+    // Other currencies: preserve user input format, only add commas for thousands
+    const inputStr = typeof amount === 'string' ? amount.replace(/,/g, '') : amount.toString();
+    
+    // Check if the input has decimal places
+    if (inputStr.includes('.')) {
+      const [integerPart, decimalPart] = inputStr.split('.');
+      const formattedInteger = parseInt(integerPart).toLocaleString();
+      return `${formattedInteger}.${decimalPart}`;
+    } else {
+      // No decimal places, just format with commas
+      return num.toLocaleString();
+    }
   }
 };
 
@@ -270,8 +280,15 @@ export default function ExpenseDetailScreen() {
     const rawValue = parseDisplayAmount(text);
     if (/^\d*\.?\d*$/.test(rawValue) || rawValue === '') { // Allow numbers and a single decimal point
       setTotalAmount(rawValue); // Store raw number string
-      const numValue = parseFloat(rawValue);
-      setDisplayTotalAmount(isNaN(numValue) ? (rawValue === '.' ? '0.' : '') : formatDisplayAmount(numValue, currency));
+      
+      // For display formatting, use the raw input to preserve decimal places as entered
+      if (rawValue === '') {
+        setDisplayTotalAmount('0');
+      } else if (rawValue === '.') {
+        setDisplayTotalAmount('0.');
+      } else {
+        setDisplayTotalAmount(formatDisplayAmount(rawValue, currency));
+      }
       
       // Update member amounts if split method is equal
       if (splitMethod === 'equal' && rawValue) {
@@ -328,8 +345,13 @@ export default function ExpenseDetailScreen() {
 
   useEffect(() => {
     // Update displayTotalAmount when currency changes
-    const numValue = parseFloat(totalAmount);
-    setDisplayTotalAmount(isNaN(numValue) ? (totalAmount === '.' ? '0.' : '0') : formatDisplayAmount(numValue, currency));
+    if (totalAmount === '') {
+      setDisplayTotalAmount('0');
+    } else if (totalAmount === '.') {
+      setDisplayTotalAmount('0.');
+    } else {
+      setDisplayTotalAmount(formatDisplayAmount(totalAmount, currency));
+    }
   }, [currency, totalAmount]); // Add totalAmount here to reformat if it changes programmatically
 
   const validateForm = (): boolean => {
