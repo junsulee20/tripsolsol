@@ -79,6 +79,14 @@
         }
       ],
       [
+        "expo-media-library",
+        {
+          "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
+          "savePhotosPermission": "이미지를 저장하기 위해 갤러리 접근 권한이 필요합니다.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
         "expo-font",
         {
           "fonts": [

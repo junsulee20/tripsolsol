@@ -9,7 +9,10 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
-  Image
+  Image,
+  SafeAreaView,
+  StatusBar,
+  Platform
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
@@ -254,14 +257,17 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>로딩 중...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -320,11 +326,15 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -339,7 +349,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 0,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
