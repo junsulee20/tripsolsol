@@ -2,60 +2,52 @@ import { router } from 'expo-router';
 import { User as FirebaseUser } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { getCurrentUser, onAuthStateChange } from '../services/firebaseService';
+import { onAuthStateChange } from '../services/firebaseService';
 import { fonts } from '../styles/globalStyles';
 
 export default function IndexScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    console.log('IndexScreen: Starting authentication check...');
-    
-    // 현재 사용자 상태를 즉시 확인
-    const currentUser = getCurrentUser();
-    if (currentUser) {
-      console.log('IndexScreen: User already authenticated, redirecting to travel');
-      router.replace('/(tabs)/travel');
-      return;
-    }
+    console.log('IndexScreen: Initializing authentication check...');
 
-    // 인증 상태 변화 감지
     const unsubscribe = onAuthStateChange((user: FirebaseUser | null) => {
-      console.log('IndexScreen: Auth state changed', user ? 'Authenticated' : 'Not authenticated');
-      
+      console.log('IndexScreen: Auth state changed. User:', user ? user.uid : 'null');
       if (user) {
-        console.log('IndexScreen: User authenticated, redirecting to travel');
+        console.log('IndexScreen: User is authenticated. Redirecting to travel tabs.');
         router.replace('/(tabs)/travel');
       } else {
-        console.log('IndexScreen: No user, redirecting to login');
+        console.log('IndexScreen: User is not authenticated. Redirecting to login.');
         router.replace('/auth/login');
       }
-      
       setIsLoading(false);
     });
 
-    // 일정 시간 후에도 인증 상태가 결정되지 않으면 로그인으로 이동
-    const timeout = setTimeout(() => {
+    const authTimeout = setTimeout(() => {
       if (isLoading) {
-        console.log('IndexScreen: Timeout reached, redirecting to login');
+        console.warn('IndexScreen: Auth state determination timed out. Redirecting to login as a fallback.');
         router.replace('/auth/login');
         setIsLoading(false);
       }
-    }, 3000);
+    }, 5000);
 
     return () => {
+      console.log('IndexScreen: Cleaning up auth listener and timeout.');
       unsubscribe();
-      clearTimeout(timeout);
+      clearTimeout(authTimeout);
     };
-  }, [isLoading]);
+  }, []);
 
-  // 로딩 화면 표시
-  return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color="#4A90E2" />
-      <Text style={styles.loadingText}>앱을 시작하는 중...</Text>
-    </View>
-  );
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+        <Text style={[styles.loadingText, {fontFamily: fonts.regular}]}>앱을 시작하는 중...</Text>
+      </View>
+    );
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({
