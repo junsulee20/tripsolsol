@@ -10,7 +10,8 @@ import {
   Platform,
   ScrollView,
   Modal,
-  Linking
+  Linking,
+  Image
 } from 'react-native';
 import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
@@ -180,11 +181,11 @@ export default function SignUpScreen() {
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="people" size={20} color="white" />
-            </View>
-          </View>
+          <Image 
+            source={require('../../assets/images/tripsolsol_logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
         <View style={styles.placeholder} />
       </View>
@@ -402,23 +403,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
+    marginBottom: 16,
   },
-  logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: '#E5E5E5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 12,
-  },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
   },
   placeholder: {
     width: 32,

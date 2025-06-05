@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoImage: {
-    width: 120,
-    height: 120,
+    width: 180,
+    height: 180,
     borderRadius: 20,
   },
   form: {
