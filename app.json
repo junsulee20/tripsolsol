@@ -9,11 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.jeehana.tripsolsol",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "영수증을 스캔하기 위해 카메라 권한이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
-        "NSPhotoLibraryAddUsageDescription": "사진을 저장하기 위해 갤러리 접근 권한이 필요합니다."
+        "NSPhotoLibraryAddUsageDescription": "사진을 저장하기 위해 갤러리 접근 권한이 필요합니다.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,7 +28,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -93,10 +96,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "766196c1-2f97-4773-b78d-16c10e3ec729"
+        "projectId": "92451242-2047-4d5c-8083-852da873e664"
       },
       "exchangeApiKey": "EKqvkPcQXQukgtH8tVtmPH7AQkSwcBHE"
     },
-    "owner": "jeehana"
+    "owner": "junsulee20"
   }
 }

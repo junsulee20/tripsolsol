@@ -203,21 +203,53 @@ export default function SettingsScreen() {
   const loadExchangeRates = async () => {
     setLoadingExchange(true);
     try {
+      console.log('🔄 환율 로드 시작');
+      
+      console.log('📡 getExchangeRates 호출 중...');
       const rates = await getExchangeRates();
+      console.log('📊 받아온 전체 환율 데이터 개수:', rates.length);
+      console.log('📊 받아온 통화 목록:', rates.map(r => r.cur_unit).join(', '));
+      
+      // rates가 배열인지 확인
+      if (!Array.isArray(rates)) {
+        console.error('❌ getExchangeRates가 배열을 반환하지 않음:', typeof rates, rates);
+        throw new Error('환율 데이터 형식이 올바르지 않습니다.');
+      }
+      
       // 주요 통화만 필터링
-      const majorRates = rates.filter(rate => 
-        MAJOR_CURRENCIES.some(currency => rate.cur_unit.includes(currency))
-      );
+      console.log('🔍 필터링 기준 통화:', MAJOR_CURRENCIES);
+      console.log('🔍 필터링 시작...');
+      
+      const majorRates = rates.filter(rate => {
+        if (!rate || !rate.cur_unit) {
+          console.warn('⚠️ 잘못된 환율 데이터:', rate);
+          return false;
+        }
+        return MAJOR_CURRENCIES.some(currency => rate.cur_unit.includes(currency));
+      });
+      
+      console.log('✅ 필터링된 주요 통화 개수:', majorRates.length);
+      console.log('✅ 필터링된 통화 목록:', majorRates.map(r => r.cur_unit).join(', '));
+      
+      console.log('💾 setExchangeRates 호출 중...');
       setExchangeRates(majorRates);
+      console.log('✅ setExchangeRates 완료');
       
       // 현재 날짜를 기본값으로 설정
+      console.log('📅 날짜 설정 중...');
       const today = getTodayString();
       const formattedDate = today.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3');
       setExchangeDate(formattedDate);
+      console.log('📅 설정된 날짜:', formattedDate);
+      
+      console.log('🎉 환율 로드 성공적으로 완료');
+      
     } catch (error) {
-      console.error('Error loading exchange rates:', error);
+      console.error('❌ Error loading exchange rates:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       showModal('환율 정보를 불러오는데 실패했습니다.', 'error');
     } finally {
+      console.log('🏁 환율 로드 완료, 로딩 상태 해제');
       setLoadingExchange(false);
     }
   };
