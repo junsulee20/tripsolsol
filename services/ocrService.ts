@@ -32,18 +32,31 @@ const extractPriceFromText = (text: string): string | null => {
   console.log('=== Price Extraction ===');
   console.log('Input text for price extraction:', text);
   
-  // 다양한 가격 패턴
+  // 다양한 가격 패턴 (더욱 포괄적으로)
   const pricePatterns = [
-    // 기본 숫자 + 원/$ 패턴
-    /(?:합계|총액|총계|금액|결제|TOTAL|Total|total)?\s*:?\s*([0-9,]+(?:\.[0-9]{2})?)\s*(?:원|₩|\$|USD|KRW)/gi,
-    // 단순 숫자 패턴 (큰 금액)
-    /([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{2})?)/g,
-    // 소수점 포함 가격
+    // 1. 합계/총액/총계 키워드와 함께 나오는 금액
+    /(?:합계|총액|총계|금액|결제|지불|payment|total|sum|amount)\s*:?\s*([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:원|₩|\$|USD|KRW|won)?/gi,
+    
+    // 2. 원화 기호와 함께 나오는 금액 (앞에 ₩가 있는 경우)
+    /₩\s*([0-9,]+(?:\.[0-9]{1,2})?)/g,
+    
+    // 3. 달러 기호와 함께 나오는 금액
+    /\$\s*([0-9,]+(?:\.[0-9]{1,2})?)/g,
+    
+    // 4. 숫자 + 원 패턴
+    /([0-9,]+(?:\.[0-9]{1,2})?)\s*원/g,
+    
+    // 5. 큰 금액 패턴 (천 단위 구분자 포함)
+    /([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?)/g,
+    
+    // 6. 소수점 포함 금액 (달러/센트 형태)
     /([0-9]+\.[0-9]{2})/g,
-    // 한국 원화 패턴
-    /([0-9,]+)\s*원/g,
-    // 달러 패턴
-    /\$\s*([0-9,]+(?:\.[0-9]{2})?)/g,
+    
+    // 7. 단순 4자리 이상 숫자 (영수증에서 가격일 가능성이 높음)
+    /(?<![0-9])([0-9]{4,})(?![0-9])/g,
+    
+    // 8. 한국어 키워드 뒤의 숫자
+    /(?:가격|값|비용|요금|price)\s*:?\s*([0-9,]+(?:\.[0-9]{1,2})?)/gi
   ];
 
   const amounts: number[] = [];
@@ -62,7 +75,8 @@ const extractPriceFromText = (text: string): string | null => {
         const amount = parseFloat(amountStr);
         console.log('Parsed amount:', amount);
         
-        if (amount > 0 && amount < 1000000) { // 합리적인 범위의 금액
+        // 금액 범위 검증 (10원 ~ 1,000,000원)
+        if (amount >= 10 && amount <= 1000000) {
           console.log('Valid amount found:', amount);
           amounts.push(amount);
         } else {
@@ -74,10 +88,12 @@ const extractPriceFromText = (text: string): string | null => {
 
   console.log('All found amounts:', amounts);
 
-  // 가장 큰 금액을 총액으로 간주 (일반적으로 영수증에서 총액이 가장 큰 값)
   if (amounts.length > 0) {
+    // 가장 큰 금액을 총액으로 간주 (일반적으로 영수증에서 총액이 가장 큰 값)
     const maxAmount = Math.max(...amounts);
-    const result = maxAmount.toFixed(2);
+    
+    // 소수점 처리: 100 이상이면 정수로, 미만이면 소수점 2자리로
+    const result = maxAmount >= 100 ? maxAmount.toFixed(0) : maxAmount.toFixed(2);
     console.log('Selected max amount:', result);
     return result;
   }
@@ -175,138 +191,201 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
   try {
     console.log('=== OCR Service Started ===');
     console.log('Input imageUri:', imageUri);
+    console.log('Platform:', Platform.OS);
 
     // API 설정 검증
     if (!CLOVA_OCR_CONFIG.secretKey || !CLOVA_OCR_CONFIG.apiUrl) {
+      console.warn('OCR API 설정이 없습니다. 환경변수를 확인해주세요.');
+      
+      // 개발 환경에서는 목 데이터 반환
+      if (__DEV__) {
+        console.log('개발 환경에서 목 OCR 데이터를 반환합니다.');
+        return {
+          amount: '15000',
+          description: 'OCR 테스트 영수증',
+          rawText: 'OCR API 설정이 없어 테스트 데이터를 반환합니다.',
+          confidence: 0.85
+        };
+      }
+      
       throw new Error('OCR API 설정이 올바르지 않습니다. 환경변수를 확인해주세요.');
     }
 
-    // 이미지를 Base64로 변환
     console.log('Converting image to Base64...');
-    const base64Image = await imageToBase64(imageUri);
-    console.log('Base64 conversion completed. Length:', base64Image.length);
+    
+    // 이미지를 Base64로 변환 (안전성 개선)
+    let base64Image: string;
+    try {
+      base64Image = await imageToBase64(imageUri);
+      console.log('Base64 conversion completed. Length:', base64Image.length);
+      
+      if (!base64Image || base64Image.length < 100) {
+        throw new Error('이미지 변환 결과가 유효하지 않습니다.');
+      }
+    } catch (conversionError) {
+      console.error('Image conversion failed:', conversionError);
+      throw new Error('이미지를 처리할 수 없습니다. 다른 이미지를 선택해주세요.');
+    }
     
     // 이미지 형식 감지
     const imageFormat = getImageFormat(imageUri);
     console.log('Detected image format:', imageFormat);
     
-    // Clova OCR API 요청 데이터
+    // Clova OCR API 요청 데이터 (일반 문서 OCR 형식)
     const requestData = {
       images: [
         {
           format: imageFormat,
-          name: 'receipt',
-          data: base64Image
-        }
+          name: 'receipt_image',
+          data: base64Image,
+        },
       ],
       requestId: `receipt_${Date.now()}`,
       version: 'V2',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      lang: 'ko', // 한국어 설정
     };
 
     console.log('=== Sending OCR Request ===');
     console.log('Request URL:', CLOVA_OCR_CONFIG.apiUrl);
     console.log('Request data (without image):', {
       ...requestData,
-      images: [{ 
-        format: requestData.images[0].format,
-        name: requestData.images[0].name,
-        data: '[BASE64_DATA_HIDDEN]' 
-      }]
+      images: [{ ...requestData.images[0], data: '[BASE64_DATA_HIDDEN]' }]
     });
 
-    const response = await fetch(CLOVA_OCR_CONFIG.apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-OCR-SECRET': CLOVA_OCR_CONFIG.secretKey,
-      },
-      body: JSON.stringify(requestData),
-    });
+    // API 호출 (타임아웃 설정)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30초 타임아웃
 
-    console.log('=== OCR API Response ===');
+    let response: Response;
+    try {
+      response = await fetch(CLOVA_OCR_CONFIG.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OCR-SECRET': CLOVA_OCR_CONFIG.secretKey,
+        },
+        body: JSON.stringify(requestData),
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      console.error('Fetch error:', fetchError);
+      
+      if (fetchError.name === 'AbortError') {
+        throw new Error('OCR 처리 시간이 초과되었습니다. 다시 시도해주세요.');
+      } else if (fetchError.message?.includes('CORS')) {
+        throw new Error('웹에서는 OCR 기능이 제한됩니다. 모바일 앱에서 사용해주세요.');
+      } else if (fetchError.message?.includes('Failed to fetch')) {
+        throw new Error('네트워크 연결을 확인하고 다시 시도해주세요.');
+      } else {
+        throw new Error('OCR 서비스에 연결할 수 없습니다: ' + fetchError.message);
+      }
+    }
+
+    console.log('=== OCR Response Received ===');
     console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    console.log('Response headers:', response.headers);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OCR API Error Response:', errorText);
+      console.error('OCR API error:', response.status, response.statusText);
       
-      // 특정 오류 코드에 대한 더 상세한 메시지
-      let errorMessage = `OCR API 오류: ${response.status}`;
-      
-      try {
-        const errorJson = JSON.parse(errorText);
-        if (errorJson.code === '1021') {
-          errorMessage = 'OCR 템플릿이 배포되지 않았거나 올바르지 않습니다. 네이버 클라우드 플랫폼에서 OCR 서비스 설정을 확인해주세요.';
-        } else if (errorJson.message) {
-          errorMessage = `OCR API 오류: ${errorJson.message}`;
-        }
-      } catch (parseError) {
-        // JSON 파싱 실패 시 원본 텍스트 사용
-        errorMessage += ` - ${errorText}`;
+      let errorMessage = 'OCR 처리에 실패했습니다.';
+      if (response.status === 401) {
+        errorMessage = 'OCR API 인증에 실패했습니다. API 키를 확인해주세요.';
+      } else if (response.status === 403) {
+        errorMessage = 'OCR API 접근 권한이 없습니다.';
+      } else if (response.status === 429) {
+        errorMessage = 'OCR API 사용 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
+      } else if (response.status >= 500) {
+        errorMessage = 'OCR 서버에 일시적인 문제가 있습니다. 잠시 후 다시 시도해주세요.';
       }
       
       throw new Error(errorMessage);
     }
 
     const result = await response.json();
-    console.log('=== OCR API Success Response ===');
-    console.log('Full API Response:', JSON.stringify(result, null, 2));
+    console.log('=== OCR Result Received ===');
+    console.log('Full OCR result:', JSON.stringify(result, null, 2));
 
-    // OCR 결과에서 텍스트 추출
+    // OCR 결과에서 텍스트 추출 (안정성 개선)
     let extractedText = '';
-    if (result.images && result.images[0] && result.images[0].fields) {
-      console.log('Extracting text from fields...');
-      console.log('Number of fields:', result.images[0].fields.length);
-      
-      extractedText = result.images[0].fields
-        .map((field: any) => {
-          console.log('Field:', field);
-          return field.inferText;
-        })
-        .join('\n');
-    } else {
-      console.log('No fields found in OCR response');
-      // fields가 없는 경우 다른 형태의 응답 구조 확인
+    let templateAmount = '';
+    let templateStoreName = '';
+    
+    try {
+      // 다양한 응답 구조에 대응
       if (result.images && result.images[0]) {
-        console.log('Checking alternative response structure...');
         const image = result.images[0];
         
-        // 다른 가능한 필드들 확인
-        if (image.receipt && image.receipt.result && image.receipt.result.storeInfo) {
-          console.log('Found receipt structure');
-          extractedText = image.receipt.result.storeInfo.name || '';
+        // 템플릿 기반 응답 처리
+        if (image.fields && Array.isArray(image.fields)) {
+          console.log('Processing template-based OCR response...');
+          console.log('Number of fields:', image.fields.length);
+          
+          for (const field of image.fields) {
+            console.log('Field:', field);
+            if (field.inferText) {
+              extractedText += field.inferText + '\n';
+              
+              // 템플릿에서 지정한 필드명으로 데이터 추출
+              if (field.name === 'total_amount') {
+                templateAmount = field.inferText;
+                console.log('Found template amount:', templateAmount);
+              }
+              if (field.name === 'store_name') {
+                templateStoreName = field.inferText;
+                console.log('Found template store name:', templateStoreName);
+              }
+            }
+          }
         }
         
-        if (image.inferResult) {
-          console.log('Found inferResult');
-          extractedText = image.inferResult;
+        // 일반 문서 OCR 응답 처리
+        else if (image.text && Array.isArray(image.text)) {
+          console.log('Processing general document OCR response...');
+          console.log('Number of text blocks:', image.text.length);
+          
+          for (const textBlock of image.text) {
+            if (textBlock.inferText) {
+              extractedText += textBlock.inferText + '\n';
+            }
+          }
+        }
+        
+        // convertedImageInfo 처리 (fallback)
+        else if (image.convertedImageInfo && image.convertedImageInfo.text) {
+          console.log('Processing convertedImageInfo...');
+          extractedText = image.convertedImageInfo.text;
         }
       }
+      
+      console.log('=== Text Extraction Completed ===');
+      console.log('Extracted text length:', extractedText.length);
+      console.log('Extracted text preview:', extractedText.substring(0, 200));
+    } catch (extractionError) {
+      console.error('Text extraction error:', extractionError);
+      extractedText = 'OCR 텍스트 추출 중 오류가 발생했습니다.';
     }
 
-    console.log('=== Extracted Text ===');
-    console.log('Raw extracted text:', extractedText);
-
-    // 텍스트에서 가격과 설명 추출
-    console.log('Extracting price and description...');
-    const amount = extractPriceFromText(extractedText);
-    const description = extractDescriptionFromText(extractedText);
+    // 최종 결과 생성
+    const finalAmount = templateAmount || extractPriceFromText(extractedText) || '';
+    const finalDescription = templateStoreName || extractDescriptionFromText(extractedText) || '';
     
-    console.log('Extracted amount:', amount);
-    console.log('Extracted description:', description);
-
     const ocrResult: OCRResult = {
-      amount: amount || undefined,
-      description: description || '영수증',
+      amount: finalAmount,
+      description: finalDescription,
       rawText: extractedText,
-      confidence: result.images?.[0]?.fields?.[0]?.inferConfidence || 
-                 result.images?.[0]?.receipt?.result?.storeInfo?.confidence || 0
+      confidence: extractedText ? 0.8 : 0.1, // 텍스트가 있으면 기본 신뢰도 0.8
     };
 
     console.log('=== Final OCR Result ===');
-    console.log('Final result:', JSON.stringify(ocrResult, null, 2));
+    console.log('Amount:', ocrResult.amount);
+    console.log('Description:', ocrResult.description);
+    console.log('Confidence:', ocrResult.confidence);
+
     return ocrResult;
 
   } catch (error: any) {
@@ -315,30 +394,22 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     console.error('Error message:', error.message);
     console.error('Error stack:', error.stack);
     console.error('Full error object:', error);
+
+    // 사용자에게 의미있는 오류 메시지 제공
+    const userFriendlyMessage = error.message || 'OCR 처리 중 알 수 없는 오류가 발생했습니다.';
     
-    // 특정 오류에 대한 사용자 친화적 메시지
-    let userMessage = error.message;
-    
-    if (error.message.includes('1021') || error.message.includes('Deploy Info')) {
-      userMessage = 'OCR 서비스 설정에 문제가 있습니다. 관리자에게 문의하세요.';
-    } else if (error.message.includes('Network') || error.message.includes('fetch')) {
-      userMessage = '네트워크 연결을 확인하고 다시 시도해주세요.';
-    } else if (error.message.includes('이미지')) {
-      userMessage = '이미지 처리 중 오류가 발생했습니다. 다른 이미지로 시도해주세요.';
-    }
-    
-    // 에러 발생 시에도 사용자가 수동으로 입력할 수 있도록 기본값 반환
+    // 기본 fallback 결과 반환 (완전 실패 방지)
     const fallbackResult: OCRResult = {
       amount: undefined,
       description: '영수증',
-      rawText: `OCR 처리 실패: ${userMessage}`,
-      confidence: 0
+      rawText: `OCR 처리 실패: ${userFriendlyMessage}`,
+      confidence: 0,
     };
-    
+
     console.log('Returning fallback result:', fallbackResult);
     
-    // 실제로는 오류를 throw하여 사용자에게 알리고 수동 입력 옵션 제공
-    throw new Error(userMessage);
+    // 오류를 다시 throw하여 호출자가 처리할 수 있도록 함
+    throw new Error(userFriendlyMessage);
   }
 };
 

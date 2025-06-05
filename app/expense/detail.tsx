@@ -79,7 +79,7 @@ const parseDisplayAmount = (formattedAmount: string): string => {
 };
 
 export default function ExpenseDetailScreen() {
-  const { tripId, tripName, ocrAmount, ocrDescription } = useLocalSearchParams();
+  const { tripId, tripName, ocrAmount, ocrDescription, ocrConfidence, ocrError } = useLocalSearchParams();
   const hiddenDateInputRef = useRef<HTMLInputElement>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [userTrips, setUserTrips] = useState<Trip[]>([]);
@@ -107,14 +107,48 @@ export default function ExpenseDetailScreen() {
   }, []);
 
   useEffect(() => {
-    // OCR 결과가 있으면 자동으로 입력
+    // OCR 결과 처리 개선
+    console.log('=== OCR Results Processing ===');
+    console.log('OCR Amount:', ocrAmount);
+    console.log('OCR Description:', ocrDescription);
+    console.log('OCR Confidence:', ocrConfidence);
+    console.log('OCR Error:', ocrError);
+    
     if (ocrAmount && typeof ocrAmount === 'string') {
-      setTotalAmount(ocrAmount);
+      const cleanAmount = ocrAmount.replace(/[^0-9.]/g, ''); // 숫자와 소수점만 추출
+      if (cleanAmount && !isNaN(parseFloat(cleanAmount))) {
+        console.log('Setting OCR amount:', cleanAmount);
+        setTotalAmount(cleanAmount);
+        setDisplayTotalAmount(formatDisplayAmount(cleanAmount, currency));
+      }
     }
-    if (ocrDescription && typeof ocrDescription === 'string') {
-      setDescription(ocrDescription);
+    
+    if (ocrDescription && typeof ocrDescription === 'string' && ocrDescription.trim()) {
+      console.log('Setting OCR description:', ocrDescription);
+      setDescription(ocrDescription.trim());
     }
-  }, [ocrAmount, ocrDescription]);
+    
+    // OCR 오류가 있었다면 사용자에게 알림
+    if (ocrError === 'true') {
+      setTimeout(() => {
+        Alert.alert(
+          'OCR 처리 실패',
+          'OCR로 영수증을 인식하지 못했습니다. 수동으로 입력해주세요.',
+          [{ text: '확인' }]
+        );
+      }, 1000);
+    } else if (ocrAmount || ocrDescription) {
+      // OCR 성공 시 알림
+      setTimeout(() => {
+        const confidence = ocrConfidence ? `(신뢰도: ${Math.round(parseFloat(ocrConfidence) * 100)}%)` : '';
+        Alert.alert(
+          '✅ OCR 완료',
+          `영수증 정보가 자동으로 입력되었습니다. ${confidence}\n\n수정이 필요하면 직접 편집해주세요.`,
+          [{ text: '확인' }]
+        );
+      }, 1000);
+    }
+  }, [ocrAmount, ocrDescription, ocrConfidence, ocrError, currency]);
 
   const initializeData = async () => {
     try {
