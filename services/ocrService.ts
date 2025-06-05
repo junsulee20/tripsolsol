@@ -11,6 +11,7 @@ export interface OCRResult {
   description?: string;
   rawText: string;
   confidence?: number;
+  candidateNumbers?: string[];
 }
 
 // 이미지 형식 감지
@@ -186,6 +187,74 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
   }
 };
 
+// 영수증에서 금액 후보 숫자들 추출 (새로 추가)
+const extractCandidateNumbers = (text: string): string[] => {
+  console.log('=== Candidate Numbers Extraction ===');
+  console.log('Input text:', text);
+  
+  const candidates: string[] = [];
+  const seenNumbers = new Set<string>(); // 중복 방지
+  
+  // 다양한 숫자 패턴
+  const numberPatterns = [
+    // 1. 쉼표가 포함된 숫자 (1,000, 10,000 등)
+    /([0-9]{1,3}(?:,[0-9]{3})+)/g,
+    
+    // 2. 소수점 포함 숫자 (달러/센트 형태)
+    /([0-9]+\.[0-9]{1,2})/g,
+    
+    // 3. 일반 정수 (4자리 이상)
+    /(?<![0-9])([0-9]{4,9})(?![0-9])/g,
+    
+    // 4. 원화 표시와 함께 나오는 숫자
+    /([0-9,]+(?:\.[0-9]{1,2})?)\s*원/g,
+    
+    // 5. 통화 기호와 함께 나오는 숫자
+    /[₩$]\s*([0-9,]+(?:\.[0-9]{1,2})?)/g
+  ];
+
+  for (const pattern of numberPatterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      let numberStr = match[1] || match[0];
+      
+      // 쉼표 제거
+      const cleanNumber = numberStr.replace(/,/g, '');
+      const numValue = parseFloat(cleanNumber);
+      
+      // 필터링 조건:
+      // 1. 10자리 이상 제외 (전화번호, 주문번호 등 제외)
+      // 2. 금액 범위: 10 ~ 10,000,000 사이
+      // 3. 유효한 숫자인지 확인
+      if (!isNaN(numValue) && 
+          cleanNumber.length < 10 && 
+          numValue >= 10 && 
+          numValue <= 10000000) {
+        
+        // 원래 형태 유지 (쉼표 포함된 형태 선호)
+        const displayNumber = numValue >= 1000 ? 
+          numValue.toLocaleString() : 
+          cleanNumber;
+        
+        if (!seenNumbers.has(displayNumber)) {
+          seenNumbers.add(displayNumber);
+          candidates.push(displayNumber);
+        }
+      }
+    }
+  }
+  
+  // 숫자 크기순으로 정렬 (큰 금액부터)
+  candidates.sort((a, b) => {
+    const numA = parseFloat(a.replace(/,/g, ''));
+    const numB = parseFloat(b.replace(/,/g, ''));
+    return numB - numA;
+  });
+  
+  console.log('Filtered candidate numbers:', candidates);
+  return candidates.slice(0, 10); // 최대 10개까지만 반환
+};
+
 // Clova OCR API 호출
 export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRResult> => {
   try {
@@ -200,11 +269,14 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
       // 개발 환경에서는 목 데이터 반환
       if (__DEV__) {
         console.log('개발 환경에서 목 OCR 데이터를 반환합니다.');
+        // 실제 OCR 처리 시간을 시뮬레이션
+        await new Promise(resolve => setTimeout(resolve, 1500));
         return {
-          amount: '15000',
+          amount: '15,000',
           description: 'OCR 테스트 영수증',
-          rawText: 'OCR API 설정이 없어 테스트 데이터를 반환합니다.',
-          confidence: 0.85
+          rawText: 'OCR API 설정이 없어 테스트 데이터를 반환합니다.\n스타벅스 커피\n아메리카노 5,500\n케이크 12,000\n부가세 1,750\n총액 15,000원',
+          confidence: 0.85,
+          candidateNumbers: ['15,000', '12,000', '5,500', '1,750', '2024', '1234']
         };
       }
       
@@ -379,6 +451,7 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
       description: finalDescription,
       rawText: extractedText,
       confidence: extractedText ? 0.8 : 0.1, // 텍스트가 있으면 기본 신뢰도 0.8
+      candidateNumbers: extractCandidateNumbers(extractedText),
     };
 
     console.log('=== Final OCR Result ===');
@@ -422,6 +495,7 @@ export const mockOCR = async (imageUri: string): Promise<OCRResult> => {
     amount: '25.50',
     description: '스타벅스 커피',
     rawText: '스타벅스 커피\n아메리카노\n25.50$\n총액: 25.50$',
-    confidence: 0.95
+    confidence: 0.95,
+    candidateNumbers: ['25.50', '15.00', '10.50', '5000', '1234']
   };
 }; 
