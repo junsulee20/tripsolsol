@@ -199,7 +199,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="example@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -212,7 +211,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="닉네임을 입력하세요"
               autoCapitalize="words"
             />
           </View>
@@ -223,7 +221,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={bankAccount}
               onChangeText={setBankAccount}
-              placeholder="계좌번호를 입력하세요 (예: 110-123-456789)"
               keyboardType="numeric"
             />
           </View>
@@ -234,7 +231,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
               secureTextEntry
               autoCapitalize="none"
             />
@@ -246,7 +242,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="••••••••"
               secureTextEntry
               autoCapitalize="none"
             />
@@ -458,6 +453,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     backgroundColor: 'white',
+    color: '#333',
   },
   checkboxContainer: {
     flexDirection: 'row',

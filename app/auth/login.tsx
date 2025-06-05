@@ -153,7 +153,6 @@ export default function LoginScreen() {
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="example@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -166,7 +165,6 @@ export default function LoginScreen() {
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
               secureTextEntry
               autoCapitalize="none"
             />
@@ -257,6 +255,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     backgroundColor: 'white',
+    color: '#333',
   },
   loginButton: {
     backgroundColor: '#4A90E2',
