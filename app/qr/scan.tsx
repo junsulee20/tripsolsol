@@ -1,23 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
+import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Linking,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Dimensions
+    Alert,
+    Image,
+    Modal,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
-import { getCurrentUser, getTripById, updateTripParticipants } from '../../services/firebaseService';
+import { auth, db } from "../../config/firebase";
 import { Trip } from '../../types';
-import TabLayout from '../../components/TabLayout';
-import { fonts } from '../../styles/globalStyles';
 
 // 웹용 QR 스캔을 위한 jsQR import
 let jsQR: any = null;
@@ -50,6 +47,12 @@ const formatDate = (d: Date) =>
 
 /* ------------------------------------------ */
 
+interface User {
+  id: string;
+  displayName: string;
+  photoURL?: string;
+}
+
 export default function QRScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -57,6 +60,9 @@ export default function QRScanScreen() {
   const [modalMessage, setModalMessage] = useState('');
   const [modalType, setModalType] = useState<'success' | 'error'>('success');
   const [isWeb, setIsWeb] = useState(false);
+  const [tripInfo, setTripInfo] = useState<Trip | null>(null);
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [participants, setParticipants] = useState<User[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanningRef = useRef<boolean>(false);
@@ -64,6 +70,30 @@ export default function QRScanScreen() {
   useEffect(() => {
     setIsWeb(Platform.OS === 'web');
   }, []);
+
+  const fetchUserInfo = async (userId: string): Promise<User> => {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      return {
+        id: userDoc.id,
+        ...userDoc.data()
+      } as User;
+    }
+    return {
+      id: userId,
+      displayName: '알 수 없음'
+    };
+  };
+
+  const fetchParticipantsInfo = async (participantIds: string[]) => {
+    const users: User[] = [];
+    for (const userId of participantIds) {
+      const user = await fetchUserInfo(userId);
+      users.push(user);
+    }
+    setParticipants(users);
+  };
 
   /* 웹 카메라 초기화 */
   useEffect(() => {
@@ -171,7 +201,7 @@ export default function QRScanScreen() {
   }, [isWeb, scanned]);
 
   /* 스캔 결과 처리 */
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scanned) return;
     
     console.log('QR 코드 스캔됨:', data);
@@ -181,11 +211,29 @@ export default function QRScanScreen() {
     try {
       const qrData = JSON.parse(data);
       if (qrData.type === "trip" && qrData.tripId) {
-        showModal('QR 코드가 성공적으로 스캔되었습니다.', 'success');
-        // 여행 페이지로 이동
-        setTimeout(() => {
-          router.push(`/trip/${qrData.tripId}`);
-        }, 1500);
+        // 여행 정보 가져오기
+        const tripRef = doc(db, 'trips', qrData.tripId);
+        const tripDoc = await getDoc(tripRef);
+        
+        if (tripDoc.exists()) {
+          const tripData = tripDoc.data() as Trip;
+          setTripInfo({
+            ...tripData,
+            id: tripDoc.id,
+            startDate: tripData.startDate,
+            endDate: tripData.endDate,
+            createdAt: tripData.createdAt,
+          });
+          // 참여자 정보 가져오기
+          await fetchParticipantsInfo(tripData.participants);
+          setShowTripModal(true);
+        } else {
+          showModal('존재하지 않는 여행입니다.', 'error');
+          setTimeout(() => {
+            setScanned(false);
+            scanningRef.current = true;
+          }, 2000);
+        }
       } else {
         showModal('유효하지 않은 QR 코드입니다.', 'error');
         setTimeout(() => {
@@ -203,6 +251,32 @@ export default function QRScanScreen() {
     }
   };
 
+  const handleJoinTrip = async () => {
+    if (!tripInfo || !auth.currentUser) return;
+
+    try {
+      const tripRef = doc(db, 'trips', tripInfo.id);
+      await updateDoc(tripRef, {
+        participants: arrayUnion(auth.currentUser.uid)
+      });
+
+      // 사용자 정보를 users 컬렉션에 저장
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      await updateDoc(userRef, {
+        displayName: auth.currentUser.displayName || '알 수 없음',
+        photoURL: auth.currentUser.photoURL || null
+      });
+
+      showModal('여행에 참여했습니다!', 'success');
+      setTimeout(() => {
+        router.push(`/trip/${tripInfo.id}`);
+      }, 1500);
+    } catch (error) {
+      console.error('여행 참여 실패:', error);
+      showModal('여행 참여에 실패했습니다.', 'error');
+    }
+  };
+
   const showModal = (message: string, type: 'success' | 'error') => {
     setModalMessage(message);
     setModalType(type);
@@ -214,6 +288,87 @@ export default function QRScanScreen() {
         scanningRef.current = true;
       }
     }, 2000);
+  };
+
+  const TripInfoModal = () => {
+    if (!tripInfo) return null;
+
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showTripModal}
+        onRequestClose={() => setShowTripModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.tripModalContent}>
+            <View style={styles.tripHeader}>
+              {tripInfo.emoji && (
+                <Text style={styles.tripEmoji}>{tripInfo.emoji}</Text>
+              )}
+              <Text style={styles.tripName}>{tripInfo.name}</Text>
+            </View>
+
+            {tripInfo.description && (
+              <Text style={styles.tripDescription}>{tripInfo.description}</Text>
+            )}
+
+            <View style={styles.tripDetails}>
+              <Text style={styles.tripDate}>
+                {tripInfo.startDate.toLocaleDateString()} ~ {tripInfo.endDate.toLocaleDateString()}
+              </Text>
+              <Text style={styles.tripCurrency}>
+                {tripInfo.currency} {tripInfo.totalAmount.toLocaleString()}
+              </Text>
+            </View>
+
+            <View style={styles.participantsContainer}>
+              <Text style={styles.participantsTitle}>참여자</Text>
+              <View style={styles.participantsList}>
+                {participants.map((participant) => (
+                  <View key={participant.id} style={styles.participantItem}>
+                    {participant.photoURL ? (
+                      <Image 
+                        source={{ uri: participant.photoURL }} 
+                        style={styles.participantPhoto}
+                      />
+                    ) : (
+                      <View style={styles.participantPhotoPlaceholder}>
+                        <Text style={styles.participantPhotoText}>
+                          {participant.displayName.charAt(0)}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.participantName}>
+                      {participant.id === auth.currentUser?.uid ? '나' : participant.displayName}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.joinButton]}
+                onPress={handleJoinTrip}
+              >
+                <Text style={styles.buttonText}>참여하기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowTripModal(false);
+                  setScanned(false);
+                  scanningRef.current = true;
+                }}
+              >
+                <Text style={styles.buttonText}>취소</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   /* 권한 확인 */
@@ -332,6 +487,8 @@ export default function QRScanScreen() {
           )}
         </View>
       </View>
+
+      <TripInfoModal />
 
       <Modal
         animationType="fade"
@@ -518,5 +675,102 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "white",
     textAlign: "center",
+  },
+  tripModalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
+    width: '80%',
+    alignItems: 'center',
+  },
+  tripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tripEmoji: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  tripName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  tripDescription: {
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  tripDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 10,
+  },
+  tripDate: {
+    fontSize: 14,
+  },
+  tripCurrency: {
+    fontSize: 14,
+  },
+  participantsContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  participantsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  participantsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  participantItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    padding: 8,
+    borderRadius: 15,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  participantPhoto: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    marginRight: 8,
+  },
+  participantPhotoPlaceholder: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  participantPhotoText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  participantName: {
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+  },
+  joinButton: {
+    backgroundColor: '#4CAF50',
+  },
+  cancelButton: {
+    backgroundColor: '#F44336',
   },
 });

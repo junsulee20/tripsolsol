@@ -1,25 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as BarcodeGenerator from 'expo-barcode-generator';
 import * as Clipboard from 'expo-clipboard';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { collection, getDocs, query, Timestamp, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
+  Image,
   Modal,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  Platform,
-  Dimensions
+  View
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { auth, db } from '../../config/firebase';
 import { Trip } from '../../types';
-import TabLayout from '../../components/TabLayout';
-import { fonts } from '../../styles/globalStyles';
 
 type FBTimestamp = Timestamp | { toDate(): Date } | Date;
 
@@ -38,6 +34,7 @@ export default function QRGenerateScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
+  const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTrips();
@@ -110,6 +107,32 @@ export default function QRGenerateScreen() {
     });
   };
 
+  const generateQRCode = async () => {
+    if (!selectedTrip) return;
+    
+    try {
+      const qrData = getQRData();
+      const qrCode = await BarcodeGenerator.generateAsync(qrData, {
+        type: 'qr',
+        width: 200,
+        height: 200,
+        backgroundColor: 'white',
+        color: 'black',
+        margin: 10,
+      });
+      setQrCodeImage(qrCode.uri);
+    } catch (error) {
+      console.error('QR 코드 생성 실패:', error);
+      showModal('QR 코드 생성에 실패했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    if (selectedTrip) {
+      generateQRCode();
+    }
+  }, [selectedTrip]);
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -172,11 +195,16 @@ export default function QRGenerateScreen() {
             </View>
             
             <View style={styles.qrCode}>
-              <QRCode
-                value={getQRData()}
-                size={200}
-                backgroundColor="white"
-              />
+              {qrCodeImage ? (
+                <Image
+                  source={{ uri: qrCodeImage }}
+                  style={styles.qrCodeImage}
+                />
+              ) : (
+                <View style={styles.qrCodePlaceholder}>
+                  <Text>QR 코드 생성 중...</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.linkContainer}>
@@ -415,5 +443,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     textAlign: 'center',
+  },
+  qrCodeImage: {
+    width: 200,
+    height: 200,
+    backgroundColor: 'white',
+  },
+  qrCodePlaceholder: {
+    width: 200,
+    height: 200,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
