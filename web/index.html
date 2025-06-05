@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#4A90E2" />
+    <link rel="manifest" href="./manifest.json" />
+    <title>TripSolSol</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      /* Hide browser chrome */
+      body {
+        -webkit-app-region: drag;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #4A90E2;
+      }
+      
+      #root {
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+        -webkit-app-region: no-drag;
+      }
+      
+      /* iOS PWA fullscreen support */
+      @media all and (display-mode: fullscreen) {
+        html, body, #root {
+          height: 100vh;
+          width: 100vw;
+        }
+      }
+      
+      /* Hide scrollbars */
+      ::-webkit-scrollbar {
+        display: none;
+      }
+      
+      * {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      
+      /* Force fullscreen on iOS */
+      @media (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) {
+        body {
+          padding-top: env(safe-area-inset-top);
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script>
+      // Force fullscreen mode
+      if ('standalone' in window.navigator && !window.navigator.standalone) {
+        // Not in standalone mode, but we can request fullscreen
+        document.addEventListener('click', function() {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen();
+          }
+        }, { once: true });
+      }
+    </script>
+  </body>
+</html> 

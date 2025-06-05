@@ -2,6 +2,8 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fonts } from '../styles/globalStyles';
 
 interface TabBarProps {
   style?: any;
@@ -9,6 +11,7 @@ interface TabBarProps {
 
 export default function TabBar({ style }: TabBarProps) {
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
 
   const tabs = [
     {
@@ -39,7 +42,14 @@ export default function TabBar({ style }: TabBarProps) {
   };
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[
+      styles.container, 
+      { 
+        paddingBottom: Math.max(insets.bottom, 8) + 8,
+        marginBottom: Platform.OS === 'android' ? 0 : 0
+      },
+      style
+    ]}>
       {tabs.map((tab) => (
         <TouchableOpacity
           key={tab.name}
@@ -70,7 +80,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
     paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
   },
   tab: {
     flex: 1,
@@ -81,5 +90,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     fontWeight: '500',
+    fontFamily: fonts.medium,
   },
 }); 

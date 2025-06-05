@@ -4,7 +4,7 @@
     "slug": "tripsolsol",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/applogo.png",
+    "icon": "./assets/images/tripsolsol_logo.png",
     "scheme": "tripsolsol",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/tripsolsol_logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -33,16 +33,33 @@
       ]
     },
     "web": {
+      "favicon": "./assets/images/tripsolsol_logo.png",
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "display": "fullscreen",
+      "themeColor": "#4A90E2",
+      "backgroundColor": "#ffffff",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "shortName": "TripSolSol",
+      "lang": "ko",
+      "scope": "/",
+      "dir": "ltr"
     },
+    "splash": {
+      "image": "./assets/images/tripsolsol_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/tripsolsol_logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -59,6 +76,17 @@
         {
           "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
           "cameraPermission": "영수증을 촬영하기 위해 카메라 권한이 필요합니다."
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Pretendard-Regular.ttf",
+            "./assets/fonts/Pretendard-Medium.ttf", 
+            "./assets/fonts/Pretendard-SemiBold.ttf",
+            "./assets/fonts/Pretendard-Bold.ttf"
+          ]
         }
       ]
     ],

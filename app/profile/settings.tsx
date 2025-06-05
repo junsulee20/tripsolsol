@@ -14,12 +14,16 @@ import {
   TouchableOpacity,
   View,
   Alert,
-  Linking
+  Linking,
+  Switch,
+  Share,
+  Platform
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { auth, db } from '../../config/firebase';
 import { getExchangeRates, MAJOR_CURRENCIES, getTodayString, testExchangeAPI } from '../../services/exchangeService';
 import { ExchangeRateResponse } from '../../types';
+import { fonts } from '../../styles/globalStyles';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -689,7 +693,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

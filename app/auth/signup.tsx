@@ -10,12 +10,14 @@ import {
   Platform,
   ScrollView,
   Modal,
-  Linking
+  Linking,
+  Image
 } from 'react-native';
 import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
 import { Ionicons } from '@expo/vector-icons';
 import { FirebaseError } from 'firebase/app';
+import { fonts } from '../../styles/globalStyles';
 
 export default function SignUpScreen() {
   const [name, setName] = useState('');
@@ -180,11 +182,11 @@ export default function SignUpScreen() {
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="people" size={20} color="white" />
-            </View>
-          </View>
+          <Image 
+            source={require('../../assets/images/tripsolsol_logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
         <View style={styles.placeholder} />
       </View>
@@ -199,7 +201,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="example@email.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -212,7 +213,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={name}
               onChangeText={setName}
-              placeholder="닉네임을 입력하세요"
               autoCapitalize="words"
             />
           </View>
@@ -223,7 +223,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={bankAccount}
               onChangeText={setBankAccount}
-              placeholder="계좌번호를 입력하세요 (예: 110-123-456789)"
               keyboardType="numeric"
             />
           </View>
@@ -234,7 +233,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
               secureTextEntry
               autoCapitalize="none"
             />
@@ -246,7 +244,6 @@ export default function SignUpScreen() {
               style={styles.input}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="••••••••"
               secureTextEntry
               autoCapitalize="none"
             />
@@ -395,9 +392,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
   },
   backButton: {
     width: 32,
@@ -407,23 +406,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
+    marginBottom: 16,
   },
-  logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: '#E5E5E5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 12,
-  },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    backgroundColor: '#4A90E2',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
   },
   placeholder: {
     width: 32,
@@ -458,6 +446,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     backgroundColor: 'white',
+    color: '#333',
   },
   checkboxContainer: {
     flexDirection: 'row',

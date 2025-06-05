@@ -8,9 +8,12 @@ import {
   Text,
   TouchableOpacity,
   View,
+  RefreshControl
 } from 'react-native';
 import { getCurrentUser, getUserTrips, getTripExpenses, getUsersByIds } from '../../services/firebaseService';
 import { Trip, Expense, User } from '../../types';
+import TabLayout from '../../components/TabLayout';
+import { fonts } from '../../styles/globalStyles';
 
 type TripSettlement = {
   trip: Trip;
@@ -323,7 +326,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
