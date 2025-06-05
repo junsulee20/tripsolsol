@@ -4,7 +4,7 @@
     "slug": "tripsolsol",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/tripsolsol_logo.png",
+    "icon": "./assets/images/applogo.png",
     "scheme": "tripsolsol",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
