@@ -360,6 +360,7 @@ export default function CreateTripScreen() {
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -369,7 +370,12 @@ export default function CreateTripScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>여행 이름 *</Text>
@@ -486,7 +492,7 @@ export default function CreateTripScreen() {
               <DateTimePicker
                 value={startDate}
                 mode="date"
-                display="default"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={onStartDateChange}
                 minimumDate={new Date()}
               />
@@ -496,7 +502,7 @@ export default function CreateTripScreen() {
               <DateTimePicker
                 value={endDate}
                 mode="date"
-                display="default"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={onEndDateChange}
                 minimumDate={startDate}
               />
@@ -621,6 +627,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
   },
   form: {
     padding: 20,

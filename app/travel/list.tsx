@@ -17,6 +17,7 @@ import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection
 import { Trip, Expense } from '../../types';
 import { fonts } from '../../styles/globalStyles';
 import TabLayout from '../../components/TabLayout';
+import { convertToKRW } from '../../services/exchangeService';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -99,29 +100,70 @@ export default function TravelListScreen() {
   };
 
   // 개별 지출에 대한 받을돈/줄돈 계산 (trip/[id]와 동일한 로직)
-  const calculateExpenseAmount = (expense: Expense, currentUserId: string) => {
-    const splitAmount = expense.amount / expense.splitBetween.length;
-    
-    if (expense.paidBy === currentUserId) {
-      // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
-      const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
-      return {
-        amount: othersAmount,
-        type: 'receive' as 'receive'
-      };
-    } else if (expense.splitBetween.includes(currentUserId)) {
-      // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
-      return {
-        amount: splitAmount,
-        type: 'owe' as 'owe'
-      };
-    } else {
-      // 내가 관련없는 지출
-      return { amount: 0, type: 'owe' as 'owe' };
+  const calculateExpenseAmount = async (expense: Expense, currentUserId: string) => {
+    // 환율 변환된 금액 사용
+    let convertedAmount = expense.amount;
+    if (expense.currency && expense.currency !== 'KRW' && expense.currency !== 'KWR') {
+      try {
+        convertedAmount = await convertToKRW(expense.amount, expense.currency);
+        console.log(`Converted ${expense.amount} ${expense.currency} to ${convertedAmount} KRW`);
+      } catch (error) {
+        console.error(`Error converting ${expense.currency} to KRW:`, error);
+        convertedAmount = expense.amount; // 실패 시 원래 금액 사용
+      }
     }
+
+    // splitDetails가 있는 경우 더 정확한 계산 사용
+    if (expense.splitDetails && expense.splitDetails.length > 0) {
+      if (expense.paidBy === currentUserId) {
+        // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+        const othersAmount = expense.splitDetails
+          .filter(split => split.userId !== currentUserId)
+          .reduce((total, split) => {
+            // 각 분할도 환율 적용
+            const convertedSplitAmount = (split.amount / expense.amount) * convertedAmount;
+            return total + convertedSplitAmount;
+          }, 0);
+        return {
+          amount: othersAmount,
+          type: 'receive' as 'receive'
+        };
+      } else {
+        // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+        const myShare = expense.splitDetails.find(split => split.userId === currentUserId);
+        if (myShare) {
+          const convertedSplitAmount = (myShare.amount / expense.amount) * convertedAmount;
+          return {
+            amount: convertedSplitAmount,
+            type: 'owe' as 'owe'
+          };
+        }
+      }
+    } else {
+      // 기존 방식 (균등 분할)
+      const splitAmount = convertedAmount / expense.splitBetween.length;
+      
+      if (expense.paidBy === currentUserId) {
+        // 내가 지불한 경우 - 다른 사람들이 나에게 줘야 할 돈 (받을돈)
+        const othersAmount = expense.splitBetween.filter(userId => userId !== currentUserId).length * splitAmount;
+        return {
+          amount: othersAmount,
+          type: 'receive' as 'receive'
+        };
+      } else if (expense.splitBetween.includes(currentUserId)) {
+        // 다른 사람이 지불했고 내가 분할에 포함된 경우 - 내가 줘야 할 돈 (줄돈)
+        return {
+          amount: splitAmount,
+          type: 'owe' as 'owe'
+        };
+      }
+    }
+    
+    // 내가 관련없는 지출
+    return { amount: 0, type: 'owe' as 'owe' };
   };
 
-  // 여행별 정산 금액 계산
+  // 여행별 정산 금액 계산 (환율 적용)
   const loadTripBalance = async (tripId: string) => {
     try {
       const currentUser = getCurrentUser();
@@ -131,14 +173,15 @@ export default function TravelListScreen() {
       let totalReceivable = 0;  // 받을 돈
       let totalPayable = 0;     // 줄 돈
 
-      expenses.forEach(expense => {
-        const { amount, type } = calculateExpenseAmount(expense, currentUser.uid);
+      // 각 지출에 대해 환율을 적용하여 계산
+      for (const expense of expenses) {
+        const { amount, type } = await calculateExpenseAmount(expense, currentUser.uid);
         if (type === 'receive') {
           totalReceivable += amount;
         } else if (type === 'owe') {
           totalPayable += amount;
         }
-      });
+      }
 
       setTripBalances(prev => ({ 
         ...prev, 
@@ -167,7 +210,7 @@ export default function TravelListScreen() {
       setTrips(userTrips);
       console.log('Trips state updated, count:', userTrips.length);
       
-      // 각 여행의 정산 금액 로드
+      // 각 여행의 정산 금액 로드 (환율 적용)
       for (const trip of userTrips) {
         await loadTripBalance(trip.id);
       }
@@ -257,17 +300,14 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <TabLayout>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>로딩 중...</Text>
-        </View>
-      </TabLayout>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>로딩 중...</Text>
+      </View>
     );
   }
 
   return (
-    <TabLayout>
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
+    <View style={{ flex: 1 }}>
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -326,7 +366,7 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </TabLayout>
+    </View>
   );
 }
 

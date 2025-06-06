@@ -21,8 +21,8 @@ import {
 } from 'react-native';
 import TabLayout from '../../components/TabLayout';
 import { auth, db } from '../../config/firebase';
-import { getExchangeRates, MAJOR_CURRENCIES, getTodayString, testExchangeAPI } from '../../services/exchangeService';
-import { ExchangeRateResponse } from '../../types';
+import { getExchangeRates, MAJOR_CURRENCIES, getTodayString, testExchangeAPI, convertToKRW } from '../../services/exchangeService';
+import { ExchangeRateResponse, Trip } from '../../types';
 import { fonts } from '../../styles/globalStyles';
 
 // 캐릭터 이미지 목록 및 키값
@@ -34,6 +34,19 @@ const characterImages = [
   require('../../assets/images/characters/koala.png'),
   require('../../assets/images/characters/cat.png'),
 ];
+
+// 회원번호 생성 함수 (Firebase ID의 맨 뒷 6자리)
+const generateMemberNumber = (userId: string): string => {
+  return userId.slice(-6).toUpperCase();
+};
+
+type TripSettlement = {
+  trip: Trip;
+  myPayments: { toUserName: string; amount: number; currency: string }[];
+  myReceivables: { fromUserName: string; amount: number; currency: string }[];
+  totalToPay: number;
+  totalToReceive: number;
+};
 
 export default function SettingsScreen() {
   const [user, setUser] = useState<any>(null);
@@ -371,52 +384,60 @@ export default function SettingsScreen() {
               )}
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.userEmail}>{user?.email}</Text>
-              {isEditingNickname ? (
-                <View style={styles.nicknameEditContainer}>
-                  <TextInput
-                    style={styles.nicknameInput}
-                    value={newNickname}
-                    onChangeText={setNewNickname}
-                    placeholder="새 닉네임"
-                    placeholderTextColor="rgba(0, 0, 0, 0.3)"
-                    editable={!isUpdatingNickname}
-                  />
-                  <View style={styles.nicknameEditActions}>
+              <View style={styles.leftSection}>
+                {isEditingNickname ? (
+                  <View style={styles.nicknameEditContainer}>
+                    <TextInput
+                      style={styles.nicknameInput}
+                      value={newNickname}
+                      onChangeText={setNewNickname}
+                      placeholder="새 닉네임"
+                      placeholderTextColor="rgba(0, 0, 0, 0.3)"
+                      editable={!isUpdatingNickname}
+                    />
+                    <View style={styles.nicknameEditActions}>
+                      <TouchableOpacity
+                        style={[styles.nicknameEditButton, styles.cancelButton]}
+                        onPress={() => {
+                          setIsEditingNickname(false);
+                          setNewNickname(user?.displayName || '');
+                        }}
+                        disabled={isUpdatingNickname}
+                      >
+                        <Text style={styles.nicknameEditButtonText}>취소</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.nicknameEditButton, styles.saveButton]}
+                        onPress={handleUpdateNickname}
+                        disabled={isUpdatingNickname}
+                      >
+                        {isUpdatingNickname ? (
+                          <ActivityIndicator size="small" color="white" />
+                        ) : (
+                          <Text style={[styles.nicknameEditButtonText, styles.saveButtonText]}>저장</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.nicknameContainer}>
+                    <Text style={styles.userName}>{user?.displayName || '닉네임 없음'}</Text>
                     <TouchableOpacity
-                      style={[styles.nicknameEditButton, styles.cancelButton]}
-                      onPress={() => {
-                        setIsEditingNickname(false);
-                        setNewNickname(user?.displayName || '');
-                      }}
-                      disabled={isUpdatingNickname}
+                      style={styles.editProfileButton}
+                      onPress={() => setIsEditingNickname(true)}
                     >
-                      <Text style={styles.nicknameEditButtonText}>취소</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.nicknameEditButton, styles.saveButton]}
-                      onPress={handleUpdateNickname}
-                      disabled={isUpdatingNickname}
-                    >
-                      {isUpdatingNickname ? (
-                        <ActivityIndicator size="small" color="white" />
-                      ) : (
-                        <Text style={[styles.nicknameEditButtonText, styles.saveButtonText]}>저장</Text>
-                      )}
+                      <Ionicons name="create-outline" size={20} color="#4A90E2" />
                     </TouchableOpacity>
                   </View>
-                </View>
-              ) : (
-                <View style={styles.nicknameContainer}>
-                  <Text style={styles.userName}>{user?.displayName || '닉네임 없음'}</Text>
-                  <TouchableOpacity
-                    style={styles.editProfileButton}
-                    onPress={() => setIsEditingNickname(true)}
-                  >
-                    <Ionicons name="create-outline" size={20} color="#4A90E2" />
-                  </TouchableOpacity>
-                </View>
-              )}
+                )}
+              </View>
+              
+              <View style={styles.rightSection}>
+                <Text style={styles.userEmail}>{user?.email}</Text>
+                {user?.uid && (
+                  <Text style={styles.memberNumber}>회원번호: {generateMemberNumber(user.uid)}</Text>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -589,9 +610,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>made by NEXT Team</Text>
-          <Text style={styles.footerText}>for</Text>
-          <Text style={styles.footerText}>Product Day</Text>
+          <Text style={styles.footerText}>made by Team Giyoyoyo</Text>
         </View>
       </ScrollView>
 
@@ -722,12 +741,24 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     flex: 1,
+  },
+  leftSection: {
+    flex: 1,
+    marginRight: 16,
+  },
+  rightSection: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   userEmail: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 4,
+    textAlign: 'right',
   },
   nicknameContainer: {
     flexDirection: 'row',
@@ -738,6 +769,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
   },
   editProfileButton: {
     width: 36,
@@ -746,6 +778,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8,
   },
   nicknameEditContainer: {
     marginTop: 8,
@@ -1191,5 +1224,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: 'white',
+  },
+  memberNumber: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'right',
   },
 }); 

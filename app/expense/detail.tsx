@@ -583,6 +583,7 @@ export default function ExpenseDetailScreen() {
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -592,7 +593,12 @@ export default function ExpenseDetailScreen() {
           <View style={styles.placeholder} />
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <TouchableOpacity 
             style={styles.tripInfo} 
             onPress={() => setTripSelectionModalVisible(true)}
@@ -1551,5 +1557,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#333',
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
 }); 
