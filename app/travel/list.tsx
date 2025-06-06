@@ -10,13 +10,13 @@ import {
   View,
   RefreshControl,
   Image,
-  SafeAreaView,
   StatusBar,
   Platform
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import { fonts } from '../../styles/globalStyles';
+import TabLayout from '../../components/TabLayout';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -257,16 +257,16 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <TabLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>로딩 중...</Text>
         </View>
-      </SafeAreaView>
+      </TabLayout>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <TabLayout>
       <StatusBar barStyle="dark-content" backgroundColor="white" />
       <View style={styles.header}>
         <View style={styles.userInfo}>
@@ -326,7 +326,7 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </TabLayout>
   );
 }
 

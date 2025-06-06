@@ -26,25 +26,25 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/login" options={{ headerShown: false }} />
-          <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="trip/create" options={{ headerShown: false }} />
-          <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="trip/edit" options={{ headerShown: false }} />
-          <Stack.Screen name="expense/add" options={{ headerShown: false, presentation: 'modal' }} />
-          <Stack.Screen name="expense/detail" options={{ headerShown: false }} />
-          <Stack.Screen name="expense/edit" options={{ headerShown: false }} />
-          <Stack.Screen name="travel/list" options={{ headerShown: false }} />
-          <Stack.Screen name="expense/camera" options={{ headerShown: false }} />
-          <Stack.Screen name="profile/edit" options={{ headerShown: false }} />
-          <Stack.Screen name="profile/settings" options={{ headerShown: false, presentation: 'modal' }} />
-          <Stack.Screen name="qr/scan" options={{ headerShown: false }} />
-          <Stack.Screen name="qr/generate" options={{ headerShown: false }} />
-          <Stack.Screen name="balance/index" options={{ headerShown: false }} />
-          <Stack.Screen name="profile/settlements" options={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="auth/login" />
+          <Stack.Screen name="auth/signup" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="trip/create" />
+          <Stack.Screen name="trip/[id]" />
+          <Stack.Screen name="trip/edit" />
+          <Stack.Screen name="expense/add" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="expense/detail" />
+          <Stack.Screen name="expense/edit" />
+          <Stack.Screen name="travel/list" />
+          <Stack.Screen name="expense/camera" />
+          <Stack.Screen name="profile/edit" />
+          <Stack.Screen name="profile/settings" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="qr/scan" />
+          <Stack.Screen name="qr/generate" />
+          <Stack.Screen name="balance/index" />
+          <Stack.Screen name="profile/settlements" />
           <Stack.Screen name="+not-found" />
         </Stack>
         <StatusBar style="dark" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
