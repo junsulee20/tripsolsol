@@ -2,7 +2,7 @@
   "expo": {
     "name": "tripsolsol",
     "slug": "tripsolsol",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/applogo.png",
     "scheme": "tripsolsol",
@@ -11,6 +11,7 @@
     "ios": {
       "bundleIdentifier": "com.jeehana.tripsolsol",
       "supportsTablet": true,
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "영수증을 스캔하기 위해 카메라 권한이 필요합니다.",
         "NSPhotoLibraryUsageDescription": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
