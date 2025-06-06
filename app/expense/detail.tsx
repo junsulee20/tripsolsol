@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -125,6 +125,24 @@ export default function ExpenseDetailScreen() {
   const [tempDateInput, setTempDateInput] = useState(''); // 웹에서 임시 날짜 입력용
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory>(ExpenseCategory.OTHER);
 
+  // 멤버별 금액을 균등하게 업데이트하는 함수
+  const updateMemberAmountsForEqualSplit = useCallback(() => {
+    if (splitMethod === 'equal' && totalAmount && memberAmounts.length > 0) {
+      const numAmount = parseFloat(totalAmount) || 0;
+      if (numAmount > 0) {
+        const memberCount = memberAmounts.length;
+        const perPersonAmount = numAmount / memberCount;
+        
+        console.log('Updating member amounts for equal split:', numAmount, 'total,', perPersonAmount, 'per person');
+        setMemberAmounts(prevAmounts => prevAmounts.map(member => ({
+          ...member,
+          amount: perPersonAmount,
+          percentage: Math.round(100 / memberCount)
+        })));
+      }
+    }
+  }, [splitMethod, totalAmount, memberAmounts.length]);
+
   useEffect(() => {
     initializeData();
   }, []);
@@ -143,6 +161,11 @@ export default function ExpenseDetailScreen() {
         console.log('Setting OCR amount:', cleanAmount);
         setTotalAmount(cleanAmount);
         setDisplayTotalAmount(formatDisplayAmount(cleanAmount, currency));
+        
+        // OCR 결과로 금액이 설정된 후 멤버별 금액 업데이트
+        setTimeout(() => {
+          updateMemberAmountsForEqualSplit();
+        }, 100);
       }
     }
     
@@ -162,7 +185,7 @@ export default function ExpenseDetailScreen() {
       }, 1000);
     }
     // OCR 성공 시 알림 제거 - camera.tsx에서 이미 모달로 처리됨
-  }, [ocrAmount, ocrDescription, ocrConfidence, ocrError, currency]);
+  }, [ocrAmount, ocrDescription, ocrConfidence, ocrError, currency, updateMemberAmountsForEqualSplit]);
 
   const initializeData = async () => {
     try {
