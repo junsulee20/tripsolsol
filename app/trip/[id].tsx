@@ -218,6 +218,11 @@ export default function TripDetailScreen() {
       grouped[dateKey].push(expense);
     });
     
+    // Sort items within each date group by createdAt (latest first)
+    Object.keys(grouped).forEach(dateKey => {
+      grouped[dateKey].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    });
+    
     const result = Object.entries(grouped).map(([date, items]) => ({
       id: date,
       date,

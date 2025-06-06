@@ -126,10 +126,10 @@ export default function BalanceScreen() {
       
       // splitDetails가 있는 경우 더 정확한 계산 사용
       if (expense.splitDetails && expense.splitDetails.length > 0) {
-        // 결제자는 전체 금액을 받아야 함
+        // 결제자는 전체 금액을 받아야 함 (양수)
         balances[expense.paidBy] += convertedAmount;
         
-        // 각 사용자는 자신의 몫만큼 지불해야 함
+        // 각 사용자는 자신의 몫만큼 줘야 함 (음수)
         expense.splitDetails.forEach(split => {
           // 분할 금액도 환율 적용
           const convertedSplitAmount = (split.amount / expense.amount) * convertedAmount;
@@ -139,10 +139,10 @@ export default function BalanceScreen() {
         // 기존 방식 (균등 분할)
         const splitAmount = convertedAmount / expense.splitBetween.length;
         
-        // 지불한 사람은 플러스 (받을 돈)
+        // 결제자는 전체 금액을 받아야 함 (양수)
         balances[expense.paidBy] += convertedAmount;
         
-        // 분할 대상자들은 마이너스 (줄 돈)
+        // 분담자들은 각자의 몫을 줘야 함 (음수)
         expense.splitBetween.forEach(userId => {
           balances[userId] -= splitAmount;
         });
