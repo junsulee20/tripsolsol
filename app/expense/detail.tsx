@@ -151,7 +151,7 @@ export default function ExpenseDetailScreen() {
       setDescription(ocrDescription.trim());
     }
     
-    // OCR 오류가 있었다면 사용자에게 알림
+    // OCR 오류가 있었다면 사용자에게 알림 (수동 입력이나 실패한 경우만)
     if (ocrError === 'true') {
       setTimeout(() => {
         Alert.alert(
@@ -160,17 +160,8 @@ export default function ExpenseDetailScreen() {
           [{ text: '확인' }]
         );
       }, 1000);
-    } else if (ocrAmount || ocrDescription) {
-      // OCR 성공 시 알림
-      setTimeout(() => {
-        const confidence = ocrConfidence ? `(신뢰도: ${Math.round(parseFloat(ocrConfidence) * 100)}%)` : '';
-        Alert.alert(
-          '✅ OCR 완료',
-          `영수증 정보가 자동으로 입력되었습니다. ${confidence}\n\n수정이 필요하면 직접 편집해주세요.`,
-          [{ text: '확인' }]
-        );
-      }, 1000);
     }
+    // OCR 성공 시 알림 제거 - camera.tsx에서 이미 모달로 처리됨
   }, [ocrAmount, ocrDescription, ocrConfidence, ocrError, currency]);
 
   const initializeData = async () => {
