@@ -398,17 +398,37 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
       console.log('Blob size:', blob.size, 'bytes');
       console.log('Blob type:', blob.type);
       
+      // 파일 크기 검증 (50MB = 52,428,800 bytes)
+      if (blob.size > 52428800) {
+        throw new Error(`이미지 파일이 너무 큽니다. 현재 크기: ${(blob.size / 1024 / 1024).toFixed(1)}MB, 최대 허용: 50MB`);
+      }
+      
+      // 이미지 형식 검증
+      if (!blob.type.startsWith('image/')) {
+        throw new Error(`지원하지 않는 파일 형식입니다: ${blob.type}. 지원 형식: JPG, PNG, PDF`);
+      }
+      
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64String = reader.result as string;
           const base64Data = base64String.split(',')[1]; // data:image/jpeg;base64, 부분 제거
+          
+          // Base64 데이터 크기 검증 (API 제한 고려)
+          const base64Size = base64Data.length * 0.75; // Base64는 실제 크기의 약 1.33배
+          console.log('Base64 estimated size:', (base64Size / 1024 / 1024).toFixed(1), 'MB');
+          
+          if (base64Size > 52428800) {
+            reject(new Error(`Base64 변환 후 이미지가 너무 큽니다: ${(base64Size / 1024 / 1024).toFixed(1)}MB`));
+            return;
+          }
+          
           console.log('Web base64 conversion completed. Length:', base64Data.length);
           resolve(base64Data);
         };
         reader.onerror = (error) => {
           console.error('FileReader error:', error);
-          reject(error);
+          reject(new Error('이미지 파일을 읽는 중 오류가 발생했습니다.'));
         };
         reader.readAsDataURL(blob);
       });
@@ -431,16 +451,53 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
         throw new Error('파일이 존재하지 않습니다: ' + imageUri);
       }
       
+      // 파일 크기 검증 (50MB = 52,428,800 bytes)
+      if (fileInfo.size && fileInfo.size > 52428800) {
+        throw new Error(`이미지 파일이 너무 큽니다. 현재 크기: ${(fileInfo.size / 1024 / 1024).toFixed(1)}MB, 최대 허용: 50MB`);
+      }
+      
+      // URI 형식 기반 이미지 형식 추정
+      const imageFormat = getImageFormat(imageUri);
+      console.log('Detected image format:', imageFormat);
+      
+      if (!['jpg', 'jpeg', 'png', 'pdf', 'tif', 'tiff'].includes(imageFormat.toLowerCase())) {
+        throw new Error(`지원하지 않는 이미지 형식입니다: ${imageFormat}. 지원 형식: JPG, JPEG, PNG, PDF, TIF, TIFF`);
+      }
+      
       console.log('Reading file as base64...');
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       
+      // Base64 데이터 검증
+      if (!base64 || base64.length < 100) {
+        throw new Error('이미지 파일이 손상되었거나 비어있습니다.');
+      }
+      
+      // Base64 크기 재검증
+      const base64Size = base64.length * 0.75;
+      console.log('Base64 estimated size:', (base64Size / 1024 / 1024).toFixed(1), 'MB');
+      
+      if (base64Size > 52428800) {
+        throw new Error(`Base64 변환 후 이미지가 너무 큽니다: ${(base64Size / 1024 / 1024).toFixed(1)}MB`);
+      }
+      
       console.log('React Native base64 conversion completed. Length:', base64.length);
       return base64;
     } catch (error) {
       console.error('FileSystem conversion failed:', error);
-      throw new Error('이미지 변환에 실패했습니다: ' + (error as Error).message);
+      
+      // 구체적인 에러 메시지 제공
+      const errorMessage = (error as Error).message;
+      if (errorMessage.includes('No such file')) {
+        throw new Error('선택한 이미지 파일을 찾을 수 없습니다. 다른 이미지를 선택해주세요.');
+      } else if (errorMessage.includes('Permission denied')) {
+        throw new Error('이미지 파일에 접근할 수 없습니다. 갤러리 권한을 확인해주세요.');
+      } else if (errorMessage.includes('크기') || errorMessage.includes('size')) {
+        throw new Error(errorMessage); // 크기 관련 에러는 그대로 전달
+      } else {
+        throw new Error('이미지 변환에 실패했습니다: ' + errorMessage);
+      }
     }
   }
 };
@@ -546,7 +603,7 @@ const extractExpenseFromLine = (line: string): ExpenseItem | null => {
 // 두 라인을 조합해서 지출 항목 추출 (설명과 금액이 분리된 경우)
 const extractExpenseFromCombinedLines = (line1: string, line2: string): ExpenseItem | null => {
   // 첫 번째 라인이 설명, 두 번째 라인이 금액인 경우
-  const amountMatch = line2.match(/^([0-9,]+(?:\.[0-9]{1,2})?)\s*원?\s*$/);
+  const amountMatch = line2.match(/^([0-9,]+(?:\.[0-9]{2})?)\s*원?\s*$/);
   if (amountMatch && isValidDescription(line1) && isValidAmount(amountMatch[1])) {
     return {
       amount: formatAmount(amountMatch[1]),
@@ -557,7 +614,7 @@ const extractExpenseFromCombinedLines = (line1: string, line2: string): ExpenseI
   }
   
   // 첫 번째 라인이 금액, 두 번째 라인이 설명인 경우
-  const firstLineAmountMatch = line1.match(/^([0-9,]+(?:\.[0-9]{1,2})?)\s*원?\s*$/);
+  const firstLineAmountMatch = line1.match(/^([0-9,]+(?:\.[0-9]{2})?)\s*원?\s*$/);
   if (firstLineAmountMatch && isValidDescription(line2) && isValidAmount(firstLineAmountMatch[1])) {
     return {
       amount: formatAmount(firstLineAmountMatch[1]),
@@ -1306,11 +1363,56 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     if (!CLOVA_OCR_CONFIG.secretKey || !CLOVA_OCR_CONFIG.apiUrl) {
       console.warn('OCR API 설정이 없습니다. 환경변수를 확인해주세요.');
       
-      // 개발 환경에서는 목 데이터 반환
+      // 개발 환경에서는 목 데이터 반환 (하지만 빈 화면 시뮬레이션)
       if (__DEV__) {
         console.log('개발 환경에서 목 OCR 데이터를 반환합니다.');
+        
+        // 이미지 분석을 통한 빈 화면 감지 시뮬레이션
+        let isEmptyScreen = false;
+        
+        try {
+          // 이미지가 매우 작거나 빈 경우 감지
+          if (!imageUri || imageUri.length < 20) {
+            isEmptyScreen = true;
+          }
+          
+          // 이미지 URI가 특정 패턴이면 빈 화면으로 판단 (테스트용)
+          if (imageUri.includes('empty') || imageUri.includes('blank')) {
+            isEmptyScreen = true;
+          }
+          
+        } catch (error) {
+          console.log('빈 화면 감지 중 오류:', error);
+        }
+        
         // 실제 OCR 처리 시간을 시뮬레이션
         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        if (isEmptyScreen) {
+          console.log('빈 화면으로 감지됨 - 빈 결과 반환');
+          return {
+            amount: undefined,
+            description: undefined,
+            rawText: '빈 화면이 감지되었습니다.',
+            confidence: 0,
+            candidateNumbers: [],
+            expenseItems: []
+          };
+        }
+        
+        // 랜덤으로 빈 결과 반환 (50% 확률)
+        if (Math.random() < 0.5) {
+          console.log('랜덤으로 빈 결과 반환 (실제 OCR 실패 시뮬레이션)');
+          return {
+            amount: undefined,
+            description: undefined,
+            rawText: '텍스트를 인식할 수 없습니다.',
+            confidence: 0,
+            candidateNumbers: [],
+            expenseItems: []
+          };
+        }
+        
         return {
           amount: '15,000',
           description: 'OCR 테스트 영수증',
@@ -1512,19 +1614,46 @@ export const processImageWithClovaOCR = async (imageUri: string): Promise<OCRRes
     const finalAmount = templateAmount || extractSmartPriceFromText(extractedText) || '';
     const finalDescription = templateStoreName || extractDescriptionFromText(extractedText) || '';
     
+    // 빈 화면 감지 및 처리 강화
+    const isEmptyResult = !extractedText || extractedText.trim().length === 0;
+    const hasNoMeaningfulText = extractedText && extractedText.trim().length < 5; // 5글자 미만은 의미없는 텍스트로 판단
+    const candidateNumbers = extractCandidateNumbers(extractedText);
+    const expenseItems = analyzeReceiptItems(extractedText);
+    const hasNoNumbers = !finalAmount && (!candidateNumbers || candidateNumbers.length === 0);
+    
+    let finalRawText = extractedText;
+    let finalConfidence = extractedText ? 0.8 : 0.1;
+    
+    // 빈 화면으로 판단되는 경우들
+    if (isEmptyResult) {
+      finalRawText = '화면에서 텍스트를 인식할 수 없습니다.';
+      finalConfidence = 0;
+      console.log('Empty screen detected: No text extracted');
+    } else if (hasNoMeaningfulText) {
+      finalRawText = `인식된 텍스트가 불충분합니다: "${extractedText.trim()}"`;
+      finalConfidence = 0.1;
+      console.log('Insufficient text detected:', extractedText.trim());
+    } else if (hasNoNumbers && finalAmount === '' && finalDescription === '') {
+      finalRawText = `텍스트는 인식되었으나 금액이나 설명을 찾을 수 없습니다.\n\n인식된 텍스트:\n${extractedText}`;
+      finalConfidence = 0.2;
+      console.log('Text found but no meaningful data extracted');
+    }
+    
     const ocrResult: OCRResult = {
-      amount: finalAmount,
-      description: finalDescription,
-      rawText: extractedText,
-      confidence: extractedText ? 0.8 : 0.1, // 텍스트가 있으면 기본 신뢰도 0.8
-      candidateNumbers: extractCandidateNumbers(extractedText),
-      expenseItems: analyzeReceiptItems(extractedText),
+      amount: finalAmount || undefined, // 빈 문자열 대신 undefined 반환
+      description: finalDescription || undefined, // 빈 문자열 대신 undefined 반환
+      rawText: finalRawText,
+      confidence: finalConfidence,
+      candidateNumbers: candidateNumbers,
+      expenseItems: expenseItems,
     };
 
     console.log('=== Final OCR Result ===');
     console.log('Amount:', ocrResult.amount);
     console.log('Description:', ocrResult.description);
     console.log('Confidence:', ocrResult.confidence);
+    console.log('Is empty result:', isEmptyResult);
+    console.log('Has meaningful text:', !hasNoMeaningfulText);
 
     return ocrResult;
 

@@ -300,14 +300,16 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
+      <TabLayout>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>로딩 중...</Text>
+        </View>
+      </TabLayout>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <TabLayout>
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -366,7 +368,7 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </TabLayout>
   );
 }
 
@@ -379,6 +381,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'white',
   },
   loadingText: {
     fontSize: 16,
@@ -455,9 +458,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    backgroundColor: 'white',
   },
   section: {
     padding: 20,
+    backgroundColor: 'white',
   },
   sectionTitle: {
     fontSize: 20,

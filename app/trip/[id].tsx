@@ -378,27 +378,29 @@ export default function TripDetailScreen() {
 
     return (
       <View style={styles.tripMateCard}>
-        <View style={styles.tripMateHeader}>
-          <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
-          <View style={styles.tripMateContainer}>
-            <View style={styles.tripMateList}>
-              {participants.map((participant, index) => (
-                <View key={participant.id} style={styles.tripMateTag}>
-                  <Text style={styles.tripMateTagText}>{participant.name}</Text>
-                  {participant.id === trip.createdBy && (
-                    <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
-                  )}
-                </View>
-              ))}
+        <Text style={styles.tripMateTitle}>여행 멤버 :</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.tripMateScrollView}
+          contentContainerStyle={styles.tripMateScrollContent}
+        >
+          {participants.map((participant, index) => (
+            <View key={participant.id} style={styles.tripMateTag}>
+              <Text style={styles.tripMateTagText}>{participant.name}</Text>
+              {participant.id === trip.createdBy && (
+                <Ionicons name="star" size={12} color="#1565C0" style={styles.creatorIcon} />
+              )}
             </View>
-            <TouchableOpacity 
-              style={styles.addMemberButton}
-              onPress={() => router.push(`/trip/edit?id=${id}`)}
-            >
-              <Ionicons name="add" size={16} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
+          ))}
+          <TouchableOpacity 
+            style={styles.addMemberTag}
+            onPress={() => router.push(`/trip/edit?id=${id}`)}
+          >
+            <Ionicons name="add" size={16} color="#4A90E2" />
+            <Text style={styles.addMemberTagText}>추가</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   };
@@ -990,38 +992,51 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
-  tripMateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
   tripMateTitle: {
     fontSize: 16,
     fontWeight: '600',
     fontFamily: fonts.semiBold,
     color: '#1976D2',
-    marginRight: 12,
+    marginBottom: 12, // 간격 추가
   },
-  tripMateContainer: {
-    flexDirection: 'row',
+  tripMateScrollView: {
+    overflow: 'hidden', // 오버플로우 숨김
+  },
+  tripMateScrollContent: {
+    paddingRight: 16, // 스크롤 여유 공간
     alignItems: 'center',
-  },
-  tripMateList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
   },
   tripMateTag: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#90CAF9',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#64B5F6',
     marginRight: 8,
-    marginBottom: 8,
+    flexShrink: 0, // 태그 크기 고정
+  },
+  addMemberTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#4A90E2',
+    borderStyle: 'dashed',
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  addMemberTagText: {
+    fontSize: 14,
+    fontFamily: fonts.semiBold,
+    color: '#4A90E2',
+    fontWeight: '600',
+    marginLeft: 4,
   },
   tripMateTagText: {
     fontSize: 14,
@@ -1032,24 +1047,7 @@ const styles = StyleSheet.create({
   creatorIcon: {
     marginLeft: 4,
   },
-  addMemberButton: {
-    backgroundColor: '#4A90E2',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-    marginBottom: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
+
   emptyExpensesContainer: {
     flex: 1,
     justifyContent: 'center',
