@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/tripsolsol_logo.png",
+        "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -33,7 +33,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/tripsolsol_logo.png",
+      "favicon": "./assets/images/applogo.png",
       "bundler": "metro",
       "output": "static",
       "display": "fullscreen",
@@ -47,7 +47,7 @@
       "dir": "ltr"
     },
     "splash": {
-      "image": "./assets/images/tripsolsol_logo.png",
+      "image": "./assets/images/applogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -59,7 +59,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/tripsolsol_logo.png",
+          "image": "./assets/images/applogo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -76,6 +76,14 @@
         {
           "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
           "cameraPermission": "영수증을 촬영하기 위해 카메라 권한이 필요합니다."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "영수증 이미지를 선택하기 위해 갤러리 접근 권한이 필요합니다.",
+          "savePhotosPermission": "이미지를 저장하기 위해 갤러리 접근 권한이 필요합니다.",
+          "isAccessMediaLocationEnabled": true
         }
       ],
       [

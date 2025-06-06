@@ -11,7 +11,9 @@ import {
   ScrollView,
   Modal,
   Linking,
-  Image
+  Image,
+  SafeAreaView,
+  StatusBar
 } from 'react-native';
 import { router } from 'expo-router';
 import { signUp } from '../../services/firebaseService';
@@ -173,10 +175,12 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       <View style={styles.header}>
         <TouchableOpacity onPress={handleLogin} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -378,11 +382,16 @@ export default function SignUpScreen() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
@@ -392,7 +401,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 0,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

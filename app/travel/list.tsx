@@ -9,11 +9,14 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
-  Image
+  Image,
+  StatusBar,
+  Platform
 } from 'react-native';
 import { getUserTrips, getCurrentUser, onAuthStateChange, testFirebaseConnection, getTripExpenses, getCurrentUserFromFirestore } from '../../services/firebaseService';
 import { Trip, Expense } from '../../types';
 import { fonts } from '../../styles/globalStyles';
+import TabLayout from '../../components/TabLayout';
 
 // 캐릭터 이미지 목록 및 키값
 const characterKeys = ['bear', 'dino', 'dog', 'koala', 'cat'];
@@ -254,14 +257,17 @@ export default function TravelListScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>로딩 중...</Text>
-      </View>
+      <TabLayout>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>로딩 중...</Text>
+        </View>
+      </TabLayout>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <TabLayout>
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <View style={styles.avatar}>
@@ -320,11 +326,15 @@ export default function TravelListScreen() {
           )}
         </View>
       </ScrollView>
-    </View>
+    </TabLayout>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -339,7 +349,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 0,
+    paddingTop: Platform.OS === 'ios' ? 10 : 15,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

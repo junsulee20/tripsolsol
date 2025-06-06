@@ -16,7 +16,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { processImageWithClovaOCR, OCRResult } from '../../services/ocrService';
+import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
+import { Link } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { processImageWithClovaOCR, OCRResult, ExpenseItem } from '../../services/ocrService';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -94,41 +98,58 @@ export default function CameraScreen() {
     }
   };
 
-  const handlePickFromGallery = async () => {
-    console.log('Attempting to pick from gallery...');
-    if (Platform.OS === 'web') {
-      console.log('Using web file input for gallery...');
-      if (fileInputRef.current) {
-        fileInputRef.current.removeAttribute('capture');
-        fileInputRef.current.click();
-      } else {
-        Alert.alert('오류', '파일 입력 요소를 찾을 수 없습니다.');
-      }
+  // ===== MediaLibrary를 사용한 개선된 갤러리 접근 =====
+  const safePickFromGalleryWithMediaLibrary = async () => {
+    // 이미 처리 중인 경우 중복 실행 방지
+    if (isProcessing || loading) {
+      console.log('Gallery access already in progress, skipping...');
       return;
     }
 
-    // ===== 모바일 환경 개선된 갤러리 로직 =====
     try {
       setLoading(true);
-      console.log('Starting mobile gallery selection...');
+      setIsProcessing(true);
+      console.log('Starting MediaLibrary gallery selection...');
       
-      // 권한 요청 및 확인
-      console.log('Requesting media library permissions...');
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log('Media library permission status:', status);
+      // MediaLibrary 권한 확인 및 요청
+      const { status: currentStatus } = await MediaLibrary.getPermissionsAsync();
+      console.log('Current MediaLibrary permission status:', currentStatus);
       
-      if (status !== 'granted') {
+      let finalStatus = currentStatus;
+      
+      if (currentStatus !== 'granted') {
+        console.log('Requesting MediaLibrary permissions...');
+        const { status: requestedStatus } = await MediaLibrary.requestPermissionsAsync();
+        console.log('Requested MediaLibrary permission status:', requestedStatus);
+        finalStatus = requestedStatus;
+      }
+      
+      if (finalStatus !== 'granted') {
         setLoading(false);
+        setIsProcessing(false);
+        
+        const message = Platform.OS === 'ios' 
+          ? '갤러리 접근이 거부되었습니다. 설정에서 "모든 사진" 또는 "선택한 사진"을 허용해주세요.'
+          : '갤러리 접근이 거부되었습니다. 앱 설정에서 권한을 허용해주세요.';
+          
         Alert.alert(
           '권한 필요', 
-          '갤러리 접근 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          message,
           [
             { text: '취소', style: 'cancel' },
             { 
-              text: '설정', 
-              onPress: () => {
-                // iOS/Android에서 설정 앱으로 이도
-                console.log('User should go to settings to enable gallery permissions');
+              text: '설정으로 이동', 
+              onPress: async () => {
+                try {
+                  if (Platform.OS === 'ios') {
+                    await Linking.openURL('app-settings:');
+                  } else {
+                    await Linking.openSettings();
+                  }
+                } catch (linkingError) {
+                  console.log('Could not open settings:', linkingError);
+                  Alert.alert('설정 열기 실패', '수동으로 설정에서 권한을 허용해주세요.');
+                }
               }
             }
           ]
@@ -136,79 +157,84 @@ export default function CameraScreen() {
         return;
       }
 
-      console.log('Gallery permission granted, launching image picker...');
-      
-      // 이미지 선택 옵션 최적화
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: false,
-        exif: false, // EXIF 데이터 제거로 용량 최적화
-        allowsMultipleSelection: false, // 단일 선택만 허용
+      // MediaLibrary로 최신 사진들 가져오기 (최근 100개)
+      console.log('Fetching photos from MediaLibrary...');
+      const assets = await MediaLibrary.getAssetsAsync({
+        first: 100,
+        mediaType: 'photo',
+        sortBy: 'creationTime',
       });
 
-      console.log('Image picker result:', {
-        canceled: result.canceled,
-        assetsCount: result.assets?.length || 0
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-        console.log('Selected image details:', {
-          uri: selectedAsset.uri,
-          width: selectedAsset.width,
-          height: selectedAsset.height,
-          fileSize: selectedAsset.fileSize
-        });
+      console.log(`Found ${assets.assets.length} photos in gallery`);
         
-        // 파일 크기 검증 (10MB 제한)
-        if (selectedAsset.fileSize && selectedAsset.fileSize > 10 * 1024 * 1024) {
+      if (assets.assets.length === 0) {
           setLoading(false);
-          Alert.alert(
-            '파일 크기 초과',
-            '선택한 이미지가 너무 큽니다. 10MB 이하의 이미지를 선택해주세요.',
-            [
-              { text: '다시 선택', onPress: () => handlePickFromGallery() },
-              { text: '취소', style: 'cancel' }
-            ]
-          );
-          return;
-        }
-        
-        console.log('Processing selected image...');
-        await processImage(selectedAsset.uri);
-      } else {
-        console.log('Image selection was canceled or no image selected');
-        setLoading(false);
+        setIsProcessing(false);
+        Alert.alert('갤러리 비어있음', '갤러리에 사진이 없습니다.');
+        return;
       }
+
+      // iOS에서 Limited Photos Library 체크
+      if (Platform.OS === 'ios' && assets.hasNextPage) {
+        console.log('iOS Limited Photos Library detected, showing selection UI...');
+        
+        // 사용자에게 더 많은 사진 선택을 유도
+          Alert.alert(
+          '사진 선택',
+          '현재 선택된 사진만 접근 가능합니다. 더 많은 사진을 선택하시겠습니까?',
+            [
+            { text: '현재 사진 사용', onPress: () => showPhotoSelector(assets.assets) },
+            { 
+              text: '더 많은 사진 선택', 
+              onPress: async () => {
+                try {
+                  // iOS에서 사진 선택 UI 열기
+                  await MediaLibrary.presentPermissionsPickerAsync();
+                  
+                  // 사진 선택 후 새로운 목록 가져오기
+                  console.log('Refetching photos after user selection...');
+                  const updatedAssets = await MediaLibrary.getAssetsAsync({
+                    first: 100,
+                    mediaType: 'photo',
+                    sortBy: 'creationTime',
+                  });
+                  
+                  console.log(`Updated photo count: ${updatedAssets.assets.length}`);
+                  showPhotoSelector(updatedAssets.assets);
+                } catch (error) {
+                  console.error('Error presenting permissions picker:', error);
+                  showPhotoSelector(assets.assets);
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        // 일반적인 경우 바로 사진 선택 UI 표시
+        showPhotoSelector(assets.assets);
+      }
+
     } catch (error: any) {
-      console.error('Mobile gallery error:', error);
-      
-      // 상태 초기화
+      console.error('MediaLibrary gallery error:', error);
       setLoading(false);
       setIsProcessing(false);
       
-      // 오류 종류에 따른 구체적인 메시지 제공
-      let errorMessage = '갤러리에서 이미지를 선택하는데 실패했습니다.';
-      
-      if (error.message?.includes('permission') || error.message?.includes('Permission')) {
-        errorMessage = '갤러리 접근 권한이 없습니다. 설정에서 권한을 허용해주세요.';
-      } else if (error.message?.includes('cancelled') || error.message?.includes('canceled')) {
-        console.log('User cancelled image selection');
-        return; // 사용자가 취소한 경우는 오류 알림 표시하지 않음
-      } else if (error.message?.includes('No such file')) {
-        errorMessage = '선택한 파일을 찾을 수 없습니다. 다른 이미지를 선택해주세요.';
-      }
-      
-      Alert.alert('갤러리 오류', errorMessage, [
-        { text: '확인', style: 'default' },
-        {
-          text: '카메라 촬영',
-          onPress: () => handleTakePhoto()
-        }
-      ]);
+      // MediaLibrary 실패 시 기존 ImagePicker로 fallback
+      console.log('Falling back to ImagePicker...');
+      safePickFromGallery();
+    }
+  };
+
+  // 사진 선택 UI 표시
+  const showPhotoSelector = (photos: MediaLibrary.Asset[]) => {
+    // 간단히 첫 번째 사진을 선택하거나, 나중에 커스텀 UI로 확장 가능
+    if (photos.length > 0) {
+      console.log('Auto-selecting first available photo for now');
+      processImage(photos[0].uri);
+    } else {
+      setLoading(false);
+      setIsProcessing(false);
+      Alert.alert('사진 없음', '사용 가능한 사진이 없습니다.');
     }
   };
 
@@ -316,7 +342,8 @@ export default function CameraScreen() {
         setLoading(false);
       }
     } catch (error: any) {
-      console.error('Mobile camera error:', error);
+      // 에러 리포팅
+      reportError('Camera Capture', error);
       
       // 상태 초기화
       setLoading(false);
@@ -337,7 +364,7 @@ export default function CameraScreen() {
         { text: '확인', style: 'default' },
         {
           text: '갤러리 선택',
-          onPress: () => handlePickFromGallery()
+          onPress: () => safePickFromGalleryWithMediaLibrary()
         }
       ]);
     }
@@ -367,7 +394,7 @@ export default function CameraScreen() {
     try {
       setIsProcessing(true);
       setLoading(true);
-      
+
       console.log('=== Starting OCR Processing ===');
       console.log('Image URI:', imageUri);
       
@@ -408,17 +435,16 @@ export default function CameraScreen() {
       setShowOcrResult(true);
       
     } catch (error: any) {
-      console.error('=== OCR Processing Error ===');
-      console.error('Error details:', error);
-      console.error('Error message:', error.message);
+      // 에러 리포팅
+      reportError('OCR Processing', error);
       
       // 컴포넌트가 언마운트된 경우 UI 업데이트 하지 않음
       if (!mountedRef.current) {
         console.log('Component unmounted, not showing error');
         return;
       }
-      
-      setLoading(false);
+              
+              setLoading(false);
       setIsProcessing(false);
       
       // 사용자가 취소한 경우는 에러로 처리하지 않음
@@ -469,16 +495,16 @@ export default function CameraScreen() {
             onPress: () => {
               console.log('User chose manual input due to OCR failure');
               if (mountedRef.current) {
-                router.replace({
-                  pathname: '/expense/detail',
-                  params: { 
-                    tripId, 
-                    tripName,
-                    ocrAmount: '',
-                    ocrDescription: '',
-                    ocrError: 'true'
-                  }
-                });
+              router.replace({
+                pathname: '/expense/detail',
+                params: { 
+                  tripId, 
+                  tripName,
+                  ocrAmount: '',
+                  ocrDescription: '',
+                  ocrError: 'true'
+                }
+              });
               }
             }
           }
@@ -522,41 +548,54 @@ export default function CameraScreen() {
   const openNumberSelector = () => {
     if (buttonDisabled) return;
     
-    // 후보 숫자가 없는 경우 경고 메시지
-    if (!ocrResult?.candidateNumbers || ocrResult.candidateNumbers.length === 0) {
-      Alert.alert(
-        '숫자 선택 불가',
-        '인식된 후보 숫자가 없습니다. 적용하기를 사용하거나 수동으로 입력해주세요.',
-        [
-          { text: '확인', style: 'default' },
-          {
-            text: '수동 입력',
-            onPress: () => {
-              if (mountedRef.current) {
-                setShowOcrResult(false);
-                router.replace({
-                  pathname: '/expense/detail',
-                  params: { 
-                    tripId, 
-                    tripName,
-                    ocrAmount: '',
-                    ocrDescription: ocrResult?.description || '',
-                    ocrError: 'manual'
-                  }
-                });
-              }
-            }
-          }
-        ]
-      );
+    // 지출 항목들이 있는 경우 지출 항목 선택기 표시
+    if (ocrResult?.expenseItems && ocrResult.expenseItems.length > 0) {
+      console.log('Opening expense item selector with', ocrResult.expenseItems.length, 'items');
+      setShowNumberSelector(true);
       return;
     }
     
-    setShowOcrResult(false);
-    setShowNumberSelector(true);
+    // 지출 항목이 없고 후보 숫자가 있는 경우 기존 숫자 선택기 표시
+    if (ocrResult?.candidateNumbers && ocrResult.candidateNumbers.length > 0) {
+      console.log('Opening number selector with', ocrResult.candidateNumbers.length, 'numbers');
+      setShowNumberSelector(true);
+      return;
+    }
+    
+    // 둘 다 없는 경우 경고 메시지
+    Alert.alert(
+      '선택 불가',
+      '인식된 지출 항목이나 숫자가 없습니다. 적용하기를 사용하거나 수동으로 입력해주세요.',
+      [{ text: '확인' }]
+    );
   };
 
-  // 숫자 선택 완료
+  // 지출 항목 선택 (새로 추가)
+  const selectExpenseItem = (selectedItem: ExpenseItem) => {
+    if (buttonDisabled) return;
+    
+    setButtonDisabled(true);
+    
+    console.log('Selected expense item:', selectedItem);
+    
+    setShowNumberSelector(false);
+    
+    // 컴포넌트가 마운트된 상태에서만 네비게이션 실행
+    if (mountedRef.current) {
+      router.replace({
+        pathname: '/expense/detail',
+        params: { 
+          tripId, 
+          tripName,
+          ocrAmount: selectedItem.amount,
+          ocrDescription: selectedItem.description,
+          ocrConfidence: (selectedItem.confidence || 0.8).toString()
+        }
+      });
+    }
+  };
+
+  // 숫자 선택 (기존 기능 - fallback용)
   const selectNumber = (selectedNumber: string) => {
     if (!ocrResult || buttonDisabled) return;
     
@@ -618,6 +657,133 @@ export default function CameraScreen() {
     setOcrResult(null);
     setShowOcrResult(false);
     setShowNumberSelector(false);
+  };
+
+  // 디바이스 정보 수집 (디버깅용)
+  const getDeviceInfo = () => {
+    try {
+      const Constants = require('expo-constants');
+      return {
+        platform: Platform.OS,
+        version: Platform.Version,
+        deviceName: Constants.deviceName || 'Unknown',
+        appVersion: Constants.expoConfig?.version || 'Unknown',
+        systemVersion: Constants.systemVersion || 'Unknown'
+      };
+    } catch (error) {
+      console.error('Failed to get device info:', error);
+      return {
+        platform: Platform.OS,
+        version: Platform.Version,
+        deviceName: 'Unknown',
+        appVersion: 'Unknown',
+        systemVersion: 'Unknown'
+      };
+    }
+  };
+
+  // 에러 리포팅 (개발 모드에서 상세 정보 제공)
+  const reportError = (context: string, error: any) => {
+    const deviceInfo = getDeviceInfo();
+    const errorReport = {
+      context,
+      timestamp: new Date().toISOString(),
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      },
+      deviceInfo,
+      appState: {
+        loading,
+        isProcessing,
+        buttonDisabled,
+        showOcrResult,
+        showNumberSelector
+      }
+    };
+    
+    console.error('=== Error Report ===');
+    console.error(JSON.stringify(errorReport, null, 2));
+    
+    // 개발 모드에서는 더 상세한 정보 제공
+    if (__DEV__) {
+      console.error('Full error object:', error);
+    }
+    
+    return errorReport;
+  };
+
+  // 기존 ImagePicker 방식 (Fallback용)
+  const safePickFromGallery = async () => {
+    try {
+      await handlePickFromGallery();
+    } catch (error) {
+      console.error('Safe gallery wrapper caught error:', error);
+      Alert.alert(
+        '갤러리 접근 실패',
+        '갤러리에 접근할 수 없습니다. 카메라로 직접 촬영하시겠습니까?',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '카메라 촬영', onPress: () => handleTakePhoto() }
+        ]
+      );
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    console.log('Attempting to pick from gallery...');
+    if (Platform.OS === 'web') {
+      console.log('Using web file input for gallery...');
+      if (fileInputRef.current) {
+        fileInputRef.current.removeAttribute('capture');
+        fileInputRef.current.click();
+      } else {
+        Alert.alert('오류', '파일 입력 요소를 찾을 수 없습니다.');
+      }
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setIsProcessing(true);
+      
+      const { status: currentStatus } = await ImagePicker.getMediaLibraryPermissionsAsync();
+      let finalStatus = currentStatus;
+      
+      if (currentStatus !== 'granted') {
+        const { status: requestedStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        finalStatus = requestedStatus;
+      }
+      
+      if (finalStatus !== 'granted') {
+        setLoading(false);
+        setIsProcessing(false);
+        Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
+        return;
+      }
+
+      const pickerOptions = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        base64: false,
+      };
+
+      const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        await processImage(result.assets[0].uri);
+      } else {
+        setLoading(false);
+        setIsProcessing(false);
+      }
+    } catch (error: any) {
+      console.error('ImagePicker gallery error:', error);
+      setLoading(false);
+      setIsProcessing(false);
+      Alert.alert('갤러리 오류', '갤러리에서 이미지를 선택하는데 실패했습니다.');
+    }
   };
 
   if (!permission && Platform.OS !== 'web') {
@@ -693,7 +859,7 @@ export default function CameraScreen() {
         <View style={styles.controls}>
           <TouchableOpacity 
             style={[styles.controlButton, (loading || isProcessing) && styles.buttonDisabled]} 
-            onPress={handlePickFromGallery}
+            onPress={safePickFromGalleryWithMediaLibrary}
             disabled={loading || isProcessing}
           >
             <Ionicons name="images" size={24} color="#4A90E2" />
@@ -794,6 +960,16 @@ export default function CameraScreen() {
                   </Text>
                 </View>
               )}
+              
+              {ocrResult?.expenseItems && ocrResult.expenseItems.length > 0 && (
+                <View style={styles.resultSection}>
+                  <Text style={styles.resultLabel}>💳 인식된 지출 항목들</Text>
+                  <Text style={styles.candidatePreview}>
+                    {ocrResult.expenseItems.slice(0, 2).map(item => `${item.description} ${item.amount}원`).join('\n')}
+                    {ocrResult.expenseItems.length > 2 && '\n...'}
+                  </Text>
+                </View>
+              )}
             </ScrollView>
             
             <View style={styles.modalActions}>
@@ -817,7 +993,7 @@ export default function CameraScreen() {
         </View>
       </Modal>
 
-      {/* 숫자 선택 모달 */}
+      {/* 숫자/지출 항목 선택 모달 */}
       <Modal
         visible={showNumberSelector}
         transparent={true}
@@ -827,7 +1003,9 @@ export default function CameraScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>🔢 금액 선택</Text>
+              <Text style={styles.modalTitle}>
+                {ocrResult?.expenseItems && ocrResult.expenseItems.length > 0 ? '💳 지출 항목 선택' : '🔢 금액 선택'}
+              </Text>
               <TouchableOpacity 
                 onPress={() => {
                   setButtonDisabled(false);
@@ -840,27 +1018,58 @@ export default function CameraScreen() {
             </View>
             
             <Text style={styles.selectorDescription}>
-              영수증에서 인식된 숫자들 중 총금액에 해당하는 숫자를 선택해주세요
+              {ocrResult?.expenseItems && ocrResult.expenseItems.length > 0 
+                ? '영수증에서 인식된 지출 항목들 중 기록하고 싶은 항목을 선택해주세요'
+                : '영수증에서 인식된 숫자들 중 총금액에 해당하는 숫자를 선택해주세요'
+              }
             </Text>
             
             <ScrollView style={styles.numberList}>
-              {ocrResult?.candidateNumbers?.map((number, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[styles.numberItem, buttonDisabled && styles.buttonDisabled]}
-                  onPress={() => selectNumber(number)}
-                  disabled={buttonDisabled}
-                >
-                  <Text style={[styles.numberText, buttonDisabled && styles.buttonDisabledText]}>{number}</Text>
-                  <Text style={[styles.numberUnit, buttonDisabled && styles.buttonDisabledText]}>
-                    {parseFloat(number.replace(/,/g, '')) >= 1000 ? '원' : '$'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {/* 지출 항목들 우선 표시 */}
+              {ocrResult?.expenseItems && ocrResult.expenseItems.length > 0 ? (
+                ocrResult.expenseItems.map((item, index) => (
+                  <TouchableOpacity
+                    key={`expense-${index}`}
+                    style={[styles.expenseItem, buttonDisabled && styles.buttonDisabled]}
+                    onPress={() => selectExpenseItem(item)}
+                    disabled={buttonDisabled}
+                  >
+                    <View style={styles.expenseItemContent}>
+                      <Text style={[styles.expenseDescription, buttonDisabled && styles.buttonDisabledText]}>
+                        {item.description}
+                      </Text>
+                      <Text style={[styles.expenseAmount, buttonDisabled && styles.buttonDisabledText]}>
+                        {item.amount}원
+                      </Text>
+                      <View style={styles.expenseItemMeta}>
+                        <Text style={styles.confidenceText}>
+                          신뢰도: {Math.round((item.confidence || 0.8) * 100)}%
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                /* 지출 항목이 없을 때 기존 숫자 선택기 */
+                ocrResult?.candidateNumbers?.map((number, index) => (
+                  <TouchableOpacity
+                    key={`number-${index}`}
+                    style={[styles.numberItem, buttonDisabled && styles.buttonDisabled]}
+                    onPress={() => selectNumber(number)}
+                    disabled={buttonDisabled}
+                  >
+                    <Text style={[styles.numberText, buttonDisabled && styles.buttonDisabledText]}>{number}</Text>
+                    <Text style={[styles.numberUnit, buttonDisabled && styles.buttonDisabledText]}>
+                      {parseFloat(number.replace(/,/g, '')) >= 1000 ? '원' : '$'}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              )}
               
-              {(!ocrResult?.candidateNumbers || ocrResult.candidateNumbers.length === 0) && (
+              {(!ocrResult?.expenseItems || ocrResult.expenseItems.length === 0) && 
+               (!ocrResult?.candidateNumbers || ocrResult.candidateNumbers.length === 0) && (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>인식된 숫자가 없습니다</Text>
+                  <Text style={styles.emptyText}>인식된 항목이 없습니다</Text>
                   <Text style={styles.emptySubText}>수동으로 입력해주세요</Text>
                 </View>
               )}
@@ -1280,6 +1489,36 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   buttonDisabledText: {
+    color: '#999',
+  },
+  expenseItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginVertical: 4,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  expenseItemContent: {
+    flex: 1,
+  },
+  expenseDescription: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  expenseAmount: {
+    fontSize: 18,
+    color: '#4A90E2',
+    fontWeight: 'bold',
+  },
+  expenseItemMeta: {
+    marginTop: 8,
+  },
+  confidenceText: {
+    fontSize: 12,
     color: '#999',
   },
 }); 
