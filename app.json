@@ -21,7 +21,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/applogo.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "foregroundImageScale": 0.7
       },
       "edgeToEdgeEnabled": true,
       "package": "com.jeehana.tripsolsol",
