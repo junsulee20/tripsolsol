@@ -16,6 +16,7 @@ import * as Clipboard from 'expo-clipboard';
 import { getCurrentUser, getTripById, getTripExpenses, getUsersByIds } from '../../services/firebaseService';
 import { Expense, Trip, User } from '../../types';
 import { fonts } from '../../styles/globalStyles';
+import { convertToKRW } from '../../services/exchangeService';
 
 type BalanceItem = {
   fromUserId: string;
@@ -64,8 +65,8 @@ export default function BalanceScreen() {
         const participants = await getUsersByIds(tripData.participants);
         const participantMap = new Map(participants.map(p => [p.id, p]));
 
-        // 모든 정산 관계 계산
-        const allSettlements = calculateAllSettlements(expenses, tripData.participants);
+        // 환율 변환과 정산 계산을 한 번에 처리
+        const allSettlements = await calculateAllSettlementsWithConversion(expenses, tripData.participants);
         
         // BalanceItem 형태로 변환
         const items: BalanceItem[] = allSettlements.map(settlement => ({
@@ -75,7 +76,7 @@ export default function BalanceScreen() {
           toUserName: participantMap.get(settlement.toUserId)?.name || '알 수 없음',
           toUserBankAccount: (participantMap.get(settlement.toUserId) as any)?.bankAccount,
           amount: settlement.amount,
-          currency: tripData.currency
+          currency: 'KRW' // 모든 정산을 한화로 통일
         }));
 
         setBalanceItems(items);
@@ -90,9 +91,27 @@ export default function BalanceScreen() {
     fetchBalanceData();
   }, [tripId]);
 
-  // 모든 사용자 간의 정산 관계를 계산하는 함수
-  const calculateAllSettlements = (expenses: Expense[], participants: string[]) => {
-    // 각 사용자별 순 잔액 계산
+  // 환율 변환과 정산 계산을 함께 처리하는 함수
+  const calculateAllSettlementsWithConversion = async (expenses: Expense[], participants: string[]) => {
+    // 1. 먼저 모든 지출을 KRW로 변환
+    const convertedExpenses: { [expenseId: string]: number } = {};
+    
+    for (const expense of expenses) {
+      if (expense.currency && expense.currency !== 'KRW' && expense.currency !== 'KWR') {
+        try {
+          const convertedAmount = await convertToKRW(expense.amount, expense.currency);
+          convertedExpenses[expense.id] = convertedAmount;
+          console.log(`Converted ${expense.amount} ${expense.currency} to ${convertedAmount} KRW`);
+        } catch (error) {
+          console.error(`Error converting ${expense.currency} to KRW:`, error);
+          convertedExpenses[expense.id] = expense.amount; // 실패 시 원래 금액 사용
+        }
+      } else {
+        convertedExpenses[expense.id] = expense.amount; // 이미 KRW인 경우
+      }
+    }
+
+    // 2. 각 사용자별 순 잔액 계산
     const balances: { [userId: string]: number } = {};
     
     // 초기화
@@ -100,20 +119,67 @@ export default function BalanceScreen() {
       balances[userId] = 0;
     });
 
-    // 각 지출에 대해 계산
+    // 각 지출에 대해 계산 (환율 변환된 금액 사용)
     expenses.forEach(expense => {
-      const splitAmount = expense.amount / expense.splitBetween.length;
+      // 환율 변환된 금액 사용
+      const convertedAmount = convertedExpenses[expense.id] || expense.amount;
       
-      // 지불한 사람은 플러스 (받을 돈)
-      balances[expense.paidBy] += expense.amount;
-      
-      // 분할 대상자들은 마이너스 (줄 돈)
-      expense.splitBetween.forEach(userId => {
-        balances[userId] -= splitAmount;
-      });
+      // splitDetails가 있는 경우 더 정확한 계산 사용
+      if (expense.splitDetails && expense.splitDetails.length > 0) {
+        // 결제자는 전체 금액을 받아야 함
+        balances[expense.paidBy] += convertedAmount;
+        
+        // 각 사용자는 자신의 몫만큼 지불해야 함
+        expense.splitDetails.forEach(split => {
+          // 분할 금액도 환율 적용
+          const convertedSplitAmount = (split.amount / expense.amount) * convertedAmount;
+          balances[split.userId] -= convertedSplitAmount;
+        });
+      } else {
+        // 기존 방식 (균등 분할)
+        const splitAmount = convertedAmount / expense.splitBetween.length;
+        
+        // 지불한 사람은 플러스 (받을 돈)
+        balances[expense.paidBy] += convertedAmount;
+        
+        // 분할 대상자들은 마이너스 (줄 돈)
+        expense.splitBetween.forEach(userId => {
+          balances[userId] -= splitAmount;
+        });
+      }
     });
 
-    // 정산이 필요한 사용자들 분리
+    // 3. 참가자가 2명인 경우 단순 정산
+    if (participants.length === 2) {
+      const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
+      
+      const [user1, user2] = participants;
+      const balance1 = balances[user1];
+      const balance2 = balances[user2];
+      
+      // balance1이 양수면 user1이 받을 돈, 음수면 user1이 줄 돈
+      if (Math.abs(balance1) > 1) { // 1원 이하는 무시
+        if (balance1 > 0) {
+          // user1이 user2로부터 받음
+          settlements.push({
+            fromUserId: user2,
+            toUserId: user1,
+            amount: Math.round(Math.abs(balance1))
+          });
+        } else {
+          // user1이 user2에게 줌
+          settlements.push({
+            fromUserId: user1,
+            toUserId: user2,
+            amount: Math.round(Math.abs(balance1))
+          });
+        }
+      }
+      
+      return settlements;
+    }
+
+    // 4. 3명 이상인 경우 기존 복잡한 정산 알고리즘 사용
     const debtors = Object.entries(balances)
       .filter(([_, balance]) => balance < 0)
       .map(([userId, balance]) => ({ userId, amount: Math.abs(balance) }))

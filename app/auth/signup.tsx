@@ -180,6 +180,7 @@ export default function SignUpScreen() {
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
       <View style={styles.header}>
         <TouchableOpacity onPress={handleLogin} style={styles.backButton}>
@@ -195,7 +196,11 @@ export default function SignUpScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>회원가입</Text>
 
         <View style={styles.form}>

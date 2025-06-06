@@ -336,6 +336,7 @@ export default function EditTripScreen() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -355,7 +356,12 @@ export default function EditTripScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* 여행 이름 */}
           <View style={styles.inputSection}>
             <Text style={styles.label}>여행 이름</Text>
@@ -514,7 +520,7 @@ export default function EditTripScreen() {
               <DateTimePicker
                 value={startDate}
                 mode="date"
-                display="default"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={onStartDateChange}
               />
             )}
@@ -523,7 +529,7 @@ export default function EditTripScreen() {
               <DateTimePicker
                 value={endDate}
                 mode="date"
-                display="default"
+                display={Platform.OS === 'ios' ? 'compact' : 'default'}
                 onChange={onEndDateChange}
               />
             )}
@@ -632,6 +638,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   inputSection: {
     marginBottom: 24,
