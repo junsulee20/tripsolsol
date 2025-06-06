@@ -420,22 +420,24 @@ export default function SettingsScreen() {
                     </View>
                   </View>
                 ) : (
-                  <View style={styles.nicknameContainer}>
-                    <Text style={styles.userName}>{user?.displayName || '닉네임 없음'}</Text>
-                    <TouchableOpacity
-                      style={styles.editProfileButton}
-                      onPress={() => setIsEditingNickname(true)}
-                    >
-                      <Ionicons name="create-outline" size={20} color="#4A90E2" />
-                    </TouchableOpacity>
+                  <View>
+                    <View style={styles.nicknameContainer}>
+                      <Text style={styles.userName}>{user?.displayName || '닉네임 없음'}</Text>
+                      <TouchableOpacity
+                        style={styles.editProfileButton}
+                        onPress={() => setIsEditingNickname(true)}
+                      >
+                        <Ionicons name="create-outline" size={20} color="#4A90E2" />
+                      </TouchableOpacity>
+                    </View>
+                    {/* 이메일 및 회원번호를 닉네임 아래로 이동 */}
+                    <View style={styles.userInfoContainer}>
+                      <Text style={styles.userEmail}>{user?.email}</Text>
+                      {user?.uid && (
+                        <Text style={styles.memberNumber}>회원번호: {generateMemberNumber(user.uid)}</Text>
+                      )}
+                    </View>
                   </View>
-                )}
-              </View>
-              
-              <View style={styles.rightSection}>
-                <Text style={styles.userEmail}>{user?.email}</Text>
-                {user?.uid && (
-                  <Text style={styles.memberNumber}>회원번호: {generateMemberNumber(user.uid)}</Text>
                 )}
               </View>
             </View>
@@ -741,24 +743,18 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     flex: 1,
   },
   leftSection: {
     flex: 1,
-    marginRight: 16,
   },
-  rightSection: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+  userInfoContainer: {
+    marginTop: 8,
   },
   userEmail: {
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
-    textAlign: 'right',
   },
   nicknameContainer: {
     flexDirection: 'row',
@@ -1229,6 +1225,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 8,
-    textAlign: 'right',
   },
 }); 

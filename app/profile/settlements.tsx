@@ -8,7 +8,8 @@ import {
   Text,
   TouchableOpacity,
   View,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native';
 import { getCurrentUser, getUserTrips, getTripExpenses, getUsersByIds } from '../../services/firebaseService';
 import { Trip, Expense, User } from '../../types';
@@ -263,7 +264,7 @@ export default function SettlementsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, Platform.OS === 'android' && styles.headerAndroid]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
             <Ionicons name="close" size={24} color="#333" />
           </TouchableOpacity>
@@ -279,7 +280,7 @@ export default function SettlementsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, Platform.OS === 'android' && styles.headerAndroid]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
           <Ionicons name="close" size={24} color="#333" />
         </TouchableOpacity>
@@ -393,11 +394,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 0,
+    paddingTop: Platform.OS === 'ios' ? 10 : 0,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
+  },
+  headerAndroid: {
+    paddingTop: 40, // 안드로이드 전용 상단 여백 추가
+    marginTop: 0,
   },
   closeButton: {
     width: 32,

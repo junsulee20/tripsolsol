@@ -583,7 +583,12 @@ export default function CreateTripScreen() {
                 data={TRAVEL_EMOJIS}
                 renderItem={renderEmojiItem}
                 keyExtractor={(item, index) => index.toString()}
-                numColumns={5}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                pagingEnabled
+                snapToInterval={280} // 이모지 5개 너비만큼
+                snapToAlignment="start"
+                decelerationRate="fast"
                 style={styles.emojiGrid}
                 contentContainerStyle={styles.emojiGridContent}
               />
@@ -849,10 +854,11 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   emojiGrid: {
-    maxHeight: 300,
+    maxHeight: 120,
   },
   emojiGridContent: {
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   emojiItem: {
     width: 60,
@@ -862,6 +868,7 @@ const styles = StyleSheet.create({
     margin: 5,
     borderRadius: 8,
     backgroundColor: '#F8F9FA',
+    marginHorizontal: 10,
   },
   emojiText: {
     fontSize: 32,
