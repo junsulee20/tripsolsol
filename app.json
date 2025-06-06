@@ -22,7 +22,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff",
-        "foregroundImageScale": 0.7
+        "foregroundImageScale": 0.5
       },
       "edgeToEdgeEnabled": true,
       "package": "com.jeehana.tripsolsol",
