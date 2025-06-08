@@ -115,44 +115,33 @@ export const getExchangeRates = async (): Promise<ExchangeRateResponse[]> => {
   }
 };
 
-// 특정 통화의 환율 가져오기
-export const getExchangeRate = async (currency: string): Promise<number> => {
+// 정산 계산용 (1엔 기준)
+export const getExchangeRateForCalculation = async (currency: string): Promise<number> => {
   const rates = await getExchangeRates();
   if (rates.length === 0) return 1;
 
-  // JPY의 경우 JPY(100) 형태로 찾기
   const searchCurrency = currency === 'JPY' ? 'JPY(100)' : currency;
   let rate = rates.find(r => r.cur_unit === searchCurrency);
   
-  if (!rate) {
-    rate = rates.find(r => 
-      r.cur_unit.includes(currency) || 
-      currency.includes(r.cur_unit.replace(/\([^)]*\)/, '').trim())
-    );
-  }
-  
-  if (!rate) {
-    console.log(`❌ 환율을 찾을 수 없음: ${currency}`);
-    return 1;
-  }
+  if (!rate) return 1;
   
   const numericRate = parseFloat(rate.kftc_deal_bas_r);
   
-  // JPY(100) 같은 경우는 이미 100엔 단위로 계산되어 있음
-  if (rate.cur_unit.includes('(100)')) {
-    return isNaN(numericRate) ? 1 : numericRate;
+  // JPY는 100엔 기준 값을 1엔 기준으로 변환
+  if (currency === 'JPY') {
+    return isNaN(numericRate) ? 1 : numericRate / 100;
   }
   
   return isNaN(numericRate) ? 1 : numericRate;
 };
 
-// 금액을 KRW로 변환
+// convertToKRW 함수 수정
 export const convertToKRW = async (amount: number, fromCurrency: string): Promise<number> => {
   if (fromCurrency.toUpperCase() === 'KRW' || fromCurrency.toUpperCase() === 'KWR') {
     return amount;
   }
   try {
-    const exchangeRate = await getExchangeRate(fromCurrency);
+    const exchangeRate = await getExchangeRateForCalculation(fromCurrency); // 새 함수 사용
     return Math.round(amount * exchangeRate);
   } catch (error) {
     console.error('Error converting to KRW:', error);
