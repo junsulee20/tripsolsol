@@ -366,7 +366,7 @@ export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
     const expensesRef = collection(db, 'expenses');
     
     // First try with orderBy
-    let q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'));
+    let q = query(expensesRef, where('tripId', '==', tripId), orderBy('date', 'desc'), orderBy('createdAt', 'desc'));
     let querySnapshot;
     
     try {
@@ -392,8 +392,16 @@ export const getTripExpenses = async (tripId: string): Promise<Expense[]> => {
       } as Expense);
     });
     
-    // Sort by date if we didn't use orderBy
-    expenses.sort((a, b) => b.date.getTime() - a.date.getTime());
+    // Sort by date first, then by createdAt if dates are the same
+    expenses.sort((a, b) => {
+      // First sort by date (latest first)
+      const dateComparison = b.date.getTime() - a.date.getTime();
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+      // If dates are the same, sort by createdAt (latest first)
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
     
     console.log('Total expenses found:', expenses.length);
     return expenses;
@@ -516,23 +524,23 @@ export const calculateTripBalances = (expenses: Expense[], participants: string[
   expenses.forEach(expense => {
     // splitDetails가 있는 경우 더 정확한 계산 사용
     if (expense.splitDetails && expense.splitDetails.length > 0) {
-      // 결제자는 전체 금액을 지불했으므로 음수 (받아야 할 돈)
-      balances[expense.paidBy] -= expense.amount;
+      // 결제자는 전체 금액을 받아야 함 (양수)
+      balances[expense.paidBy] += expense.amount;
       
-      // 각 사용자는 자신의 몫만큼 양수 (줘야 할 돈)
+      // 각 사용자는 자신의 몫만큼 줘야 함 (음수)
       expense.splitDetails.forEach(split => {
-        balances[split.userId] += split.amount;
+        balances[split.userId] -= split.amount;
       });
     } else {
       // 기존 방식 (균등 분할)
       const splitAmount = expense.amount / expense.splitBetween.length;
       
-      // Add to payer's balance (they paid for others)
-      balances[expense.paidBy] -= expense.amount;
+      // 결제자는 전체 금액을 받아야 함 (양수)
+      balances[expense.paidBy] += expense.amount;
       
-      // Subtract from each person's balance (they owe money)
+      // 분담자들은 각자의 몫을 줘야 함 (음수)
       expense.splitBetween.forEach(userId => {
-        balances[userId] += splitAmount;
+        balances[userId] -= splitAmount;
       });
     }
   });
