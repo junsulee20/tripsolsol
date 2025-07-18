@@ -6,4 +6,3 @@
 
 - react-native, firebase, expo 기반
 
-![image.png](attachment:616a6b13-003d-4594-882e-1b6275da476d:image.png)
